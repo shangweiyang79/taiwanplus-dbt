@@ -25,9 +25,17 @@ models:
       +materialized: view
     marts:
       +materialized: view
+    # 與舊 social_hub view 同名的相容層。prod 時寫回 social_hub（見 macros/generate_schema_name.sql），
+    # Looker Studio 不用重接；dev 時一律寫進 target.schema。
+    social_hub:
+      +materialized: view
+      +schema: social_hub
 
 seeds:
   taiwanplus_dbt:
     +persist_docs:
       relation: true
       columns: true
+    dept_accounts:
+      +column_types:
+        active_to: date

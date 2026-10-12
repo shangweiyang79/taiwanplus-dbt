@@ -1,0 +1,114 @@
+version: 2
+
+# 原表 = Python 腳本 / Cloud Run / BQ 排程查詢寫進來的表，dbt 只讀不寫。
+# 這裡就是 dbt 專案與 TaiwanPlus_api、news_classification_project 兩個 repo 之間的「合約」。
+# freshness 門檻依更新頻率設定：每週更新的表 8 天警告、14 天報錯。
+
+sources:
+  - name: youtube
+    database: ivory-airfoil-418408
+    schema: youtube_channel_summary
+    tables:
+      - name: video_news_broad
+        description: >
+          新聞部（Newsroom + Talks + Connected）YouTube 影片表，一列一支影片，數字為累計值。
+          由 BQ 排程查詢 `yt_video_news_broad` 每天台灣 13:00 重建，只含 2026-01-01 之後發布的影片。
+          dept_scope = 'newsroom' 的部分與 video_news_livestream 完全一致（2026-10-12 實測影片清單相同、觀看數 0 差異）。
+          定義見 news_classification_project/deploy/sql/video_news_broad.sql。
+        config:
+          loaded_at_field: time_published
+          freshness:
+            warn_after: {count: 3, period: day}
+            error_after: {count: 7, period: day}
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
+          - name: dept_scope
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['newsroom', 'talks', 'connected']
+      - name: video_news_category
+        description: >
+          雲端分類 pipeline（Cloud Run news-classify-monthly，每月 5 號）寫入的 YouTube 影片主題分類，
+          以 YouTube video_id 為主鍵。source = 'shorts_gemini' 的是 Shorts，分類另由 social_hub.yt_shorts 提供。
+
+  - name: instagram
+    database: ivory-airfoil-418408
+    schema: Instagram_data
+    description: Instagram reels 的每日累計快照，同一支 reel 會有很多列，必須取最新 data_date 那一列，不能 SUM。
+    config:
+      loaded_at_field: "CAST(data_date AS TIMESTAMP)"
+      freshness:
+        warn_after: {count: 8, period: day}
+        error_after: {count: 14, period: day}
+    tables:
+      - name: News
+        description: Newsroom 的 IG 帳號。
+      - name: Talks
+        description: Talks 的 IG 帳號。沒有 caption / thumbnail_url 欄位。
+      - name: Connected
+        description: >
+          Connected 的 IG 帳號，2026-07-04 停更（實測最後一則 reel 發布於 2026-07-10），歷史資料保留。
+          已停更所以不檢查 freshness。沒有 caption / thumbnail_url 欄位。
+        config:
+          freshness: null
+
+  - name: facebook
+    database: ivory-airfoil-418408
+    schema: Facebook_data
+    tables:
+      - name: TaiwanPlus_news_videos
+        description: Newsroom 的 FB 影片，一列一支影片，數字為累計值。
+        config:
+          loaded_at_field: updated_at
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
+
+  - name: x
+    database: ivory-airfoil-418408
+    schema: X_data
+    tables:
+      - name: post_metrics
+        description: Newsroom 的 X 貼文成效，x_analytics_bq.py 每週由 X 後台匯出檔寫入，一列一則貼文。
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: total_video_views
+            description: walkthrough §3.6 (d)：不應該有 NULL。
+            data_tests: [not_null]
+
+  - name: social_hub
+    database: ivory-airfoil-418408
+    schema: social_hub
+    tables:
+      - name: post_map
+        description: >
+          CMS Social Media Feed 的 VOD × 平台貼文對照表（socialmediafeed.py 每週寫入），只涵蓋 Newsroom。
+          自然鍵為 (vod_id, platform, post_id)。
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
+      - name: yt_shorts
+        description: >
+          YouTube Shorts 清單與分類（yt_shorts_bq.py 每月從活頁簿 shorts 分頁整表覆蓋）。
+          是判斷 YouTube 影片是否為 Shorts 的唯一依據，不能用影片長度判斷。
+          目前只涵蓋 TaiwanPlus News 與 Taiwan Explained 兩個頻道。
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
+      - name: tag_aliases
+        description: tag 同義詞對照（tag_aliases_bq.py 從 tag_aliases.json 上傳）。
+      - name: vod_content_category
+        description: CMS 匯出的 VOD content_category（vod_content_category_bq.py 不定期上傳）。
+      - name: vertical_crosswalk
+        description: 直式影片跨平台推論配對（vertical_crosswalk.py 每月整表覆蓋）。

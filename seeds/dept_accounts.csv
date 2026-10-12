@@ -1,0 +1,9 @@
+dept_scope,dept_label,platform,account_label,source_table,active_to,note
+newsroom,Newsroom,YouTube,TaiwanPlus News / TaiwanPlus Livestream / Taiwan Explained by TaiwanPlus,youtube_channel_summary.video_news_broad,,新聞部原本的範圍
+newsroom,Newsroom,Instagram,Newsroom IG,Instagram_data.News,,
+newsroom,Newsroom,Facebook,Newsroom FB,Facebook_data.TaiwanPlus_news_videos,,
+newsroom,Newsroom,X,Newsroom X,X_data.post_metrics,,
+talks,Talks,YouTube,Taiwan Talks,youtube_channel_summary.video_news_broad,,
+talks,Talks,Instagram,Talks IG,Instagram_data.Talks,,
+connected,Connected,YouTube,CONNECTED on TaiwanPlus,youtube_channel_summary.video_news_broad,,
+connected,Connected,Instagram,Connected IG,Instagram_data.Connected,2026-07-04,已停更，歷史資料保留；實測最後一則 reel 發布於 2026-07-10
