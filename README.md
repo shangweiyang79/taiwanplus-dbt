@@ -40,4 +40,21 @@ profile 放在 `~/.dbt/profiles.yml`，不進版控。
   - `newsroom_social_performance`：只看 Newsroom
 - 其他 metric：各平台的 `*_video_views`、`watch_time_hours`、`engagements`、`engagement_rate`、`post_count`、`avg_views_per_post`、`impressions`（僅 YouTube）。
 
-本機的 `dbt sl validate` / `dbt sl query` 需要 dbt platform（`dbt_cloud.yml`）。沒有的話，可以改用 `dbt-semantic-interfaces` 驗證 `target/semantic_manifest.json`。
+本機的 `dbt sl validate` / `dbt sl query` 需要 dbt platform（`dbt_cloud.yml`）。
+
+## AI chatbot（免費路線）
+
+| 檔案 | 用途 |
+|---|---|
+| `models/marts/agg_news_dept_social_monthly` | 認證匯總表（月 × 單位 × 平台），常見問題直接讀這張 |
+| `ai_context/news_dept_social_context.md` | 給 AI 讀的定義檔，**自動產生，不要手改** |
+| `ai_context/eval_questions.yml` | 7 題測試題庫，用來檢驗 chatbot 的回答 |
+| `ai_context/claude_skill/SKILL.md` | Claude Code skill 的版控副本。實際生效的位置是 `analytics_pipeline/.claude/skills/news-dept-social/` |
+
+改了定義（`_definitions.md`、`_marts.yml`、seeds）之後：
+
+```powershell
+dbt build --target prod                     # 部署
+python scripts/build_ai_context.py          # 重新產生 AI 定義檔
+python scripts/run_eval_reference.py        # 看測試題庫的標準答案
+```沒有的話，可以改用 `dbt-semantic-interfaces` 驗證 `target/semantic_manifest.json`。
