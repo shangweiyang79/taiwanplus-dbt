@@ -14,6 +14,11 @@ clean-targets: ["target", "dbt_packages"]
 
 # 所有 description 都寫回 BigQuery 的 table / column 描述，
 # 讓 BQ 的 Gemini / Conversational Analytics 也讀得到同一份定義。
+#
+# prod 的 dataset 配置（dev 一律寫進 target.schema，見 macros/generate_schema_name.sql）：
+#   dbt_internal      staging / intermediate，不給人直接查
+#   news_dept_social  新聞部社群成效主表、日期表、對照表
+#   social_hub        與舊 view 同名的相容層，Looker Studio 接這裡
 models:
   taiwanplus_dbt:
     +persist_docs:
@@ -21,12 +26,13 @@ models:
       columns: true
     staging:
       +materialized: view
+      +schema: dbt_internal
     intermediate:
       +materialized: view
+      +schema: dbt_internal
     marts:
       +materialized: view
-    # 與舊 social_hub view 同名的相容層。prod 時寫回 social_hub（見 macros/generate_schema_name.sql），
-    # Looker Studio 不用重接；dev 時一律寫進 target.schema。
+      +schema: news_dept_social
     social_hub:
       +materialized: view
       +schema: social_hub
@@ -36,6 +42,7 @@ seeds:
     +persist_docs:
       relation: true
       columns: true
+    +schema: news_dept_social
     dept_accounts:
       +column_types:
         active_to: date
