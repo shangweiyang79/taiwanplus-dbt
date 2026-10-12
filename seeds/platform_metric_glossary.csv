@@ -1,0 +1,13 @@
+platform,canonical_metric,native_column,native_label,definition,cross_platform_comparable,note
+YouTube,video_views,total_views,Views,YouTube 觀看次數,false,
+Instagram,video_views,Total Plays,Plays,Reels 播放次數（取最新一天的累計快照）,false,原表是每日累計快照，直接 SUM 會灌水上百倍
+Facebook,video_views,video_views_3s,3-second video views,播放滿 3 秒的次數,false,門檻最低，數字天生比其他平台大
+X,video_views,total_video_views,Video views,X 影片觀看次數,false,
+YouTube,watch_time_hours,total_watch_time_hours,Watch time (hours),觀看時長（小時）,false,
+Instagram,watch_time_hours,View total time_hrs,View total time,觀看時長（小時）,false,
+Facebook,watch_time_hours,hours_viewed,,觀看時長（小時）,false,
+X,watch_time_hours,,,X 不提供觀看時長,false,
+YouTube,engagements,total_likes + total_comments + total_shares,,按讚 + 留言 + 分享,false,
+Instagram,engagements,Reels interactions + Shares,,Reels 互動 + 分享,false,
+Facebook,engagements,engagements,Engagements,FB 原生互動數（心情 + 留言 + 分享）,false,
+X,engagements,likes + comments_replies + shares_retweets,,按讚 + 回覆 + 轉推,false,不用 total_actions（不含留言，會低估約 5%）

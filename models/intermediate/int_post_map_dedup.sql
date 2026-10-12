@@ -9,6 +9,6 @@ select
   metrics_key,
   vod_id
 from {{ ref('stg_social_hub__post_map') }}
-where join_key is not null
+where metrics_key is not null
   and vod_id is not null
 qualify row_number() over (partition by platform, metrics_key order by vod_id) = 1

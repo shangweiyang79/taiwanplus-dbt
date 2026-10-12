@@ -10,6 +10,8 @@
 --   2. 數字都是累計值，愈晚發布累計愈少，最新月份天生偏低。
 --   3. impressions / ctr 只有 YouTube 有；watch_time_hours X 沒有。
 select
+  -- 單欄唯一鍵（semantic layer 的 primary entity）：不同平台的貼文 ID 理論上可能撞號
+  concat(m.platform, ':', m.join_key)               as post_uid,
   m.platform,
   m.dept_scope,
   m.join_key                                        as post_key,

@@ -1,0 +1,38 @@
+version: 2
+
+# 與舊 social_hub view 同名的相容層，只有 Newsroom。Looker Studio 接的是這些名稱。
+# 新分析請用 fct_social_post_performance（新聞部三個單位）。
+
+models:
+  - name: vod_category
+    description: >
+      一列 = 一支 VOD（只有 Newsroom）。主題分類 + tags，排除 Shorts（Shorts 分類在 social_hub.yt_shorts）。
+      publish_date 由 vod_id 前 6 碼推導。
+    columns:
+      - name: vod_id
+        description: CMS 的 VOD ID。walkthrough §3.6 (a)：必須一列對一支 VOD。
+        data_tests: [unique, not_null]
+      - name: publish_date
+        description: 由 vod_id 前 6 碼推導的發布日。
+      - name: new_category
+        description: 主題分類（9 大類）。
+      - name: tags_text
+        description: 正規化後的 tag，以逗號串接（Looker Studio 用）。
+
+  - name: v_platform_post_performance
+    description: >
+      相容 view：與舊 social_hub.v_platform_post_performance 相同，一列 = Newsroom 在任一平台上的一則影片貼文。
+      新聞部全範圍請用 fct_social_post_performance。
+
+  - name: v_platform_monthly_wide
+    description: >
+      相容 view：一列 = 一個月，Newsroom 四平台攤平成欄位，Looker Studio 四平台儀表板使用。
+      total_views 是四種不同定義的「觀看」硬加起來，只能看趨勢。
+    columns:
+      - name: month_start
+        data_tests: [unique, not_null]
+
+  - name: v_vod_social_performance
+    description: >
+      相容 view：一列 = 一則有 VOD ID 的貼文（post_map 為骨幹，只有 Newsroom）。
+      has_metrics = false 表示這則貼文對不到成效資料。

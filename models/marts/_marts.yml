@@ -1,0 +1,240 @@
+version: 2
+
+models:
+  - name: time_spine_daily
+    description: 一列 = 一天，給 semantic layer 做時間彙總用的日期表。
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        description: 日期
+        granularity: day
+
+  - name: fct_social_post_performance
+    description: "{{ doc('fct_social_post_performance') }}"
+
+    semantic_model:
+      enabled: true
+      name: social_post
+    agg_time_dimension: publish_date
+
+    columns:
+      - name: post_uid
+        description: 貼文唯一鍵，格式為 `平台:貼文 ID`。
+        entity:
+          name: post
+          type: primary
+        data_tests: [unique, not_null]
+
+      - name: vod_id
+        description: CMS 的 VOD ID。只有 Newsroom 且走過 CMS 發布流程的貼文才有，其餘為 NULL。
+        entity:
+          name: vod
+          type: foreign
+
+      - name: platform
+        description: "{{ doc('platform') }}"
+        dimension:
+          type: categorical
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['YouTube', 'Instagram', 'Facebook', 'X']
+
+      - name: dept_scope
+        description: "{{ doc('dept_scope') }}"
+        dimension:
+          type: categorical
+          label: 新聞部單位
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['newsroom', 'talks', 'connected']
+
+      - name: post_key
+        description: 平台上的貼文 ID（YouTube video_id、IG shortcode、FB video_id、X post_id）。
+
+      - name: link
+        description: 貼文連結，取自各平台原表。
+
+      - name: publish_date
+        description: 貼文在該平台的發布日（不是 VOD 的 publish_date）。semantic layer 的預設時間維度。
+        granularity: day
+        dimension:
+          type: time
+
+      - name: year_month
+        description: 發布月份字串（YYYY-MM）。
+
+      - name: month_start
+        description: 發布月份第一天，給 Looker Studio 的日期控制項使用。
+
+      - name: platform_title
+        description: 平台上的標題。YouTube、FB、X 有值；IG 為 NULL。
+
+      - name: caption
+        description: 貼文文案。IG 只有 Newsroom 在 2025-06-02 之後有值；YouTube 為 NULL。
+
+      - name: thumbnail_url
+        description: 縮圖網址。IG、FB 是會過期的 Meta CDN 簽章網址。
+
+      - name: views
+        description: "{{ doc('video_views_definition') }}"
+
+      - name: watch_time_hours
+        description: 觀看時長（小時）。X 不提供，為 NULL。
+
+      - name: engagements
+        description: 互動數。YouTube = 讚 + 留言 + 分享；IG = Reels interactions + Shares；FB = 原生 engagements；X = 讚 + 回覆 + 轉推。
+
+      - name: impressions
+        description: 曝光次數，只有 YouTube 有。
+
+      - name: ctr
+        description: 縮圖點閱率，只有 YouTube 有。
+
+      - name: orientation
+        description: 平台自己的影片形式（shorts / reels / video）。X 的 'video' 代表「無此資訊」，不代表橫式。
+        dimension:
+          type: categorical
+
+      - name: is_vertical
+        description: 是否為直式影片（跨平台正規化）。X 一律為 FALSE（無此資訊），比較直式成效時應排除 X。
+        dimension:
+          type: categorical
+
+      - name: is_in_post_map
+        description: 這則貼文是否走過 CMS 發布流程（有 VOD ID）。
+        dimension:
+          type: categorical
+
+      - name: program
+        description: 節目名稱（只有 Newsroom 的 VOD 有）。
+        dimension:
+          type: categorical
+
+      - name: content_category
+        description: CMS 的內容分類（只有 Newsroom 的 VOD 有）。
+        dimension:
+          type: categorical
+
+      - name: new_category
+        description: 主題分類（9 大類，雲端分類 pipeline 產出，只有 Newsroom 的 VOD 有）。
+        dimension:
+          type: categorical
+
+      - name: tags_text
+        description: 正規化後的 tag，以逗號串接。
+
+    metrics:
+      - name: video_views
+        label: 影片觀看數
+        description: "{{ doc('video_views_definition') }}"
+        type: simple
+        agg: sum
+        expr: views
+
+      - name: yt_video_views
+        label: YouTube 觀看數
+        description: YouTube 的 Views（total_views）。
+        type: simple
+        agg: sum
+        expr: views
+        filter: "{{ Dimension('post__platform') }} = 'YouTube'"
+
+      - name: ig_video_views
+        label: Instagram 播放數
+        description: Instagram 的 Plays（Total Plays，取最新快照）。
+        type: simple
+        agg: sum
+        expr: views
+        filter: "{{ Dimension('post__platform') }} = 'Instagram'"
+
+      - name: fb_video_views
+        label: Facebook 3 秒觀看數
+        description: Facebook 的 3-second video views（video_views_3s），門檻最低。
+        type: simple
+        agg: sum
+        expr: views
+        filter: "{{ Dimension('post__platform') }} = 'Facebook'"
+
+      - name: x_video_views
+        label: X 影片觀看數
+        description: X 的 Video views（total_video_views）。
+        type: simple
+        agg: sum
+        expr: views
+        filter: "{{ Dimension('post__platform') }} = 'X'"
+
+      - name: watch_time_hours
+        label: 觀看時長（小時）
+        description: 觀看時長加總。X 不提供，所以跨平台加總只含 YouTube + IG + FB。
+        type: simple
+        agg: sum
+        expr: watch_time_hours
+
+      - name: engagements
+        label: 互動數
+        description: 互動數加總，各平台定義見 engagements 欄位說明。
+        type: simple
+        agg: sum
+        expr: engagements
+
+      - name: impressions
+        label: 曝光數（僅 YouTube）
+        description: 縮圖曝光次數，只有 YouTube 有，不是跨平台指標。
+        type: simple
+        agg: sum
+        expr: impressions
+
+      - name: post_count
+        label: 影片貼文數
+        description: 影片貼文數。
+        type: simple
+        agg: count
+        expr: post_uid
+
+      - name: engagement_rate
+        label: 互動率
+        description: 互動數 / 影片觀看數。各平台觀看與互動定義都不同，只能在同一平台內比較。
+        type: ratio
+        numerator: engagements
+        denominator: video_views
+
+      - name: avg_views_per_post
+        label: 平均每則觀看數
+        description: 影片觀看數 / 影片貼文數。少數爆量貼文會把平均拉高，建議同時看中位數或最大值。
+        type: ratio
+        numerator: video_views
+        denominator: post_count
+
+saved_queries:
+  - name: news_dept_social_performance
+    label: 新聞部社群成效
+    description: >
+      「新聞部社群成效」的預設答案：新聞部三個單位（Newsroom + Talks + Connected）
+      在四個平台的影片觀看數，依月份、單位、平台切分。
+      各平台觀看定義不同，請各平台看自己的趨勢，不要跨平台比較優劣。
+    query_params:
+      metrics:
+        - video_views
+        - post_count
+      group_by:
+        - "TimeDimension('metric_time', 'month')"
+        - "Dimension('post__dept_scope')"
+        - "Dimension('post__platform')"
+
+  - name: newsroom_social_performance
+    label: Newsroom 社群成效
+    description: 只看 Newsroom（新聞台）在四個平台的影片觀看數，依月份與平台切分。
+    query_params:
+      metrics:
+        - video_views
+        - post_count
+      group_by:
+        - "TimeDimension('metric_time', 'month')"
+        - "Dimension('post__platform')"
+      where:
+        - "{{ Dimension('post__dept_scope') }} = 'newsroom'"

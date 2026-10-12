@@ -1,0 +1,39 @@
+version: 2
+
+seeds:
+  - name: dept_accounts
+    description: >
+      新聞部單位 × 平台 × 原表對照。{{ doc('news_dept_definition') }}
+    columns:
+      - name: dept_scope
+        description: "{{ doc('dept_scope') }}"
+      - name: platform
+        description: "{{ doc('platform') }}"
+      - name: account_label
+        description: 帳號 / 頻道名稱。
+      - name: source_table
+        description: 該帳號成效資料所在的 BigQuery 原表。
+      - name: active_to
+        description: 停更日期。NULL 表示仍在經營。
+      - name: note
+        description: 備註。
+
+  - name: platform_metric_glossary
+    description: >
+      各平台指標對照表：統一指標名稱（canonical_metric）對應到各平台的原生欄位與平台上的名稱。
+      {{ doc('video_views_definition') }}
+    columns:
+      - name: platform
+        description: "{{ doc('platform') }}"
+      - name: canonical_metric
+        description: dbt / semantic layer 裡的統一指標名稱。
+      - name: native_column
+        description: 平台原表的欄位或計算式。
+      - name: native_label
+        description: 平台後台上顯示的名稱。
+      - name: definition
+        description: 指標定義。
+      - name: cross_platform_comparable
+        description: 能否直接跨平台比較絕對值。
+      - name: note
+        description: 備註。
