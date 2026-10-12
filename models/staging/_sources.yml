@@ -15,11 +15,13 @@ sources:
           由 BQ 排程查詢 `yt_video_news_broad` 每天台灣 13:00 重建，只含 2026-01-01 之後發布的影片。
           dept_scope = 'newsroom' 的部分與 video_news_livestream 完全一致（2026-10-12 實測影片清單相同、觀看數 0 差異）。
           定義見 news_classification_project/deploy/sql/video_news_broad.sql。
+        # 以「最新一支影片的發布時間」判斷新鮮度。表雖然每天重建，但 YouTube owner 報表
+        # 本身有延遲，2026-10-12 實測最新影片是 5 天前發布，所以門檻放寬到 7 / 10 天。
         config:
           loaded_at_field: time_published
           freshness:
-            warn_after: {count: 3, period: day}
-            error_after: {count: 7, period: day}
+            warn_after: {count: 7, period: day}
+            error_after: {count: 10, period: day}
         columns:
           - name: video_id
             data_tests: [unique, not_null]
