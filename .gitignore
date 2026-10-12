@@ -1,0 +1,11 @@
+target/
+dbt_packages/
+logs/
+.user.yml
+profiles.yml
+*.keyfile.json
+service_account*.json
+.env
+.venv/
+__pycache__/
+dbt_internal_packages/

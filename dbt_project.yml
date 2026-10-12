@@ -1,0 +1,33 @@
+name: taiwanplus_dbt
+version: "1.0.0"
+config-version: 2
+profile: taiwanplus_dbt
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+snapshot-paths: ["snapshots"]
+
+clean-targets: ["target", "dbt_packages"]
+
+# 所有 description 都寫回 BigQuery 的 table / column 描述，
+# 讓 BQ 的 Gemini / Conversational Analytics 也讀得到同一份定義。
+models:
+  taiwanplus_dbt:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: view
+
+seeds:
+  taiwanplus_dbt:
+    +persist_docs:
+      relation: true
+      columns: true
