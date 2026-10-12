@@ -25,7 +25,8 @@ select
   -- 以下為 YouTube 專屬欄位，不進跨平台 union
   y.channel_id,
   y.channel_display_name,
-  y.video_length
+  y.video_length,
+  y.time_published
 from {{ source('youtube', 'video_news_broad') }} y
 left join {{ source('social_hub', 'yt_shorts') }} s
   on y.video_id = s.video_id

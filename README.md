@@ -30,6 +30,7 @@ profile 放在 `~/.dbt/profiles.yml`，不進版控。
 | `seeds/dept_accounts.csv` | 單位 × 平台 × 原表對照 |
 | `seeds/platform_metric_glossary.csv` | 各平台指標的原生欄位與名稱對照 |
 | `tests/` | walkthrough §3.6 的哨兵檢查 |
+| `scripts/reconcile_social_hub.py` | 逐列對帳 dbt 版與舊版 13 張 `social_hub` view（`python scripts/reconcile_social_hub.py --new <dataset> --old <dataset>`） |
 
 ## Semantic layer
 
