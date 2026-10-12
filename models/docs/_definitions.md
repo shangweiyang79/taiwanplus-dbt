@@ -40,6 +40,49 @@
 {% enddocs %}
 
 
+{% docs ai_answering_guide %}
+### 判斷範圍
+
+| 使用者說 | 範圍 |
+|---|---|
+| 新聞部、新聞部門、news department | `dept_scope` in ('newsroom', 'talks', 'connected')，三個都要 |
+| Newsroom、新聞台、TaiwanPlus News | `dept_scope = 'newsroom'` |
+| Talks、Taiwan Talks | `dept_scope = 'talks'` |
+| Connected、CONNECTED | `dept_scope = 'connected'` |
+| 沒指定平台 | 該範圍內所有平台（新聞部 = YouTube、Instagram、Facebook、X） |
+
+### 判斷指標
+
+- 「成效」「表現」「performance」沒指定指標時 → `video_views`（影片觀看數），並附上 `post_count`（貼文數）當背景。
+- 「互動」→ `engagements`；「互動率」→ `engagement_rate`；「觀看時長」→ `watch_time_hours`（X 沒有）。
+- 各平台的觀看指標原生名稱不同（YouTube Views、IG Plays、FB 3-second video views、X Video views），回答時要用統一名稱「影片觀看數」，必要時括號註明原生名稱。
+
+### 判斷期間
+
+- 「近期」「最近」沒指定期間時 → **最近三個完整月份**；若也列出本月，必須標註「本月至今、尚未完整」。
+- 期間依各平台的發布日（`publish_date` / `month_start`）。
+
+### 選擇資料表
+
+| 問題類型 | 查哪張 |
+|---|---|
+| 新聞部 / 單位 / 平台的逐月成效（最常見） | `news_dept_social.agg_news_dept_social_monthly`，**直接讀，不要自己從明細加總** |
+| 自訂期間（某幾週、某幾天）、依主題 / 節目 / 直式切分、單則貼文排行 | `news_dept_social.fct_social_post_performance` |
+| 單位、平台、帳號對照，某帳號是否停更 | `news_dept_social.dept_accounts` |
+| 指標在各平台的原生欄位與定義 | `news_dept_social.platform_metric_glossary` |
+
+不要查 `dbt_internal` 或各平台原表：原表有快照、重複等陷阱（例如 IG 原表直接 SUM 會灌水上百倍），已在上述表格處理好。
+
+### 呈現規則
+
+1. **各平台分開列**。不要把四個平台的觀看數加總成單一數字當主結論；若列出總和，要註明「各平台定義不同，只能看量級」。
+2. **不要用絕對值比較平台優劣**（FB 3 秒門檻最低，數字天生最大）。比較請看各平台自己的逐月趨勢（例如月增率）。
+3. 最新月份累計天數少、天生偏低，不要解讀成衰退。
+4. 主動說明資料限制：Connected 的 IG 於 2026-07-04 停更；Talks / Connected 沒有主題分類；X 沒有觀看時長；YouTube 資料從 2026-01-01 起。
+5. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
+{% enddocs %}
+
+
 {% docs fct_social_post_performance %}
 一列 = 新聞部（Newsroom + Talks + Connected）在任一平台上的一則影片貼文，是新聞部社群成效的主表。
 

@@ -210,6 +210,41 @@ models:
         numerator: video_views
         denominator: post_count
 
+  - name: agg_news_dept_social_monthly
+    description: >
+      一列 = 月 × 新聞部單位 × 平台，新聞部社群成效的認證匯總表。
+      常見問題（新聞部 / 各單位 / 各平台的逐月成效）直接查這張，不要從明細自己加總。
+      {{ doc('news_dept_definition') }}
+      {{ doc('video_views_definition') }}
+    columns:
+      - name: month_start
+        description: 月份第一天（依各平台發布日）。
+        data_tests: [not_null]
+      - name: year_month
+        description: 月份字串（YYYY-MM）。
+      - name: dept_scope
+        description: "{{ doc('dept_scope') }}"
+      - name: platform
+        description: "{{ doc('platform') }}"
+      - name: video_views
+        description: 影片觀看數，各平台定義不同（見表格說明），不可跨平台比較優劣。
+      - name: post_count
+        description: 影片貼文數。
+      - name: watch_time_hours
+        description: 觀看時長（小時）。X 沒有，為 NULL。
+      - name: engagements
+        description: 互動數，各平台定義見 fct_social_post_performance.engagements。
+      - name: engagement_rate
+        description: 互動數 / 影片觀看數。只能在同一平台內比較。
+      - name: avg_views_per_post
+        description: 平均每則觀看數。易受少數爆量貼文影響，請搭配 max_views_per_post 判讀。
+      - name: max_views_per_post
+        description: 單則最高觀看數，用來判斷平均值是否被爆量貼文拉高。
+      - name: is_current_month
+        description: 是否為本月（台北時間）。本月資料不完整，數字天生偏低。
+      - name: days_since_month_end
+        description: 該月最後一天距今幾天。負數 = 本月尚未結束；數字愈小，累計愈不完整。
+
 saved_queries:
   - name: news_dept_social_performance
     label: 新聞部社群成效

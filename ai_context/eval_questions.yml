@@ -1,0 +1,139 @@
+# AI chatbot 測試題庫：用來檢驗任何 chatbot 是否照 news_dept_social_context.md 的定義回答。
+#
+# 每題的 reference_sql 是標準答案的算法（資料每天在變，所以存 SQL 不存數字）。
+# 執行 python scripts/run_eval_reference.py 會跑出當下的標準答案，再拿 chatbot 的回答來比對：
+#   - 範圍、指標、期間是否正確（expected）
+#   - 是否提到 must_mention、是否避開 must_not
+#   - 數字是否與標準答案一致
+
+questions:
+  - id: q1_news_dept_recent
+    question: 新聞部近期社群成效如何？
+    expected:
+      scope: newsroom + talks + connected
+      metric: video_views（附 post_count）
+      period: 最近三個完整月份
+    must_mention:
+      - 包含 Newsroom、Talks、Connected 三個單位
+      - 各平台分開列出
+      - 各平台觀看定義不同（例如 FB 是 3 秒觀看）
+      - Connected 的 IG 已停更
+    must_not:
+      - 只回答 Newsroom
+      - 用四平台加總的單一數字當主結論
+      - 用絕對值說某平台表現最好
+    reference_sql: |
+      SELECT year_month, dept_scope, platform, video_views, post_count
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
+        AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
+      ORDER BY dept_scope, platform, year_month
+
+  - id: q2_newsroom_yt_last_month
+    question: Newsroom 上個月 YouTube 的觀看數是多少？
+    expected:
+      scope: newsroom
+      metric: video_views（YouTube Views）
+      period: 上一個完整月份
+    must_mention:
+      - 只算 Newsroom（TaiwanPlus News / Livestream / Explained 三個頻道）
+    must_not:
+      - 把 Talks 或 Connected 的 YouTube 算進去
+    reference_sql: |
+      SELECT year_month, video_views, post_count
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
+        AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
+
+  - id: q3_talks_ig_engagement_rate
+    question: Talks 今年 IG 的互動率是多少？
+    expected:
+      scope: talks
+      metric: engagement_rate = SUM(engagements) / SUM(views)
+      period: 今年 1 月 1 日至今
+    must_mention:
+      - 互動率是整體加總後相除，不是各月互動率的平均
+    must_not:
+      - 把各月的 engagement_rate 直接平均
+      - 拿去和其他平台的互動率比較優劣
+    reference_sql: |
+      SELECT SUM(engagements) AS engagements, SUM(video_views) AS video_views,
+             SAFE_DIVIDE(SUM(engagements), SUM(video_views)) AS engagement_rate
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      WHERE dept_scope = 'talks' AND platform = 'Instagram'
+        AND month_start >= DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), YEAR)
+
+  - id: q4_connected_ig_recent
+    question: Connected 最近在 IG 的表現怎麼樣？
+    expected:
+      scope: connected
+      metric: video_views
+      period: 最近三個完整月份
+    must_mention:
+      - Connected 的 IG 已於 2026-07-04 停更，所以近期沒有新貼文
+      - 若要看 Connected 近期表現，應改看 YouTube
+    must_not:
+      - 把沒有資料解讀成「表現很差」
+    reference_sql: |
+      SELECT dept_scope, platform, account_label, active_to, note
+      FROM `ivory-airfoil-418408.news_dept_social.dept_accounts`
+      WHERE dept_scope = 'connected'
+
+  - id: q5_best_platform
+    question: 新聞部哪個平台表現最好？
+    expected:
+      scope: newsroom + talks + connected
+      metric: video_views 的各平台自身趨勢（例如月增率），不是絕對值
+      period: 最近三個完整月份
+    must_mention:
+      - 各平台觀看定義不同，無法直接用絕對值比較
+      - 改用各平台自己的成長趨勢回答
+    must_not:
+      - 直接說 Facebook 觀看數最高所以表現最好
+    reference_sql: |
+      WITH m AS (
+        SELECT month_start, platform, SUM(video_views) AS video_views
+        FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+        WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
+          AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
+        GROUP BY 1, 2
+      )
+      SELECT platform, FORMAT_DATE('%Y-%m', month_start) AS year_month, video_views,
+             SAFE_DIVIDE(video_views - LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start),
+                         LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start)) AS mom_growth
+      FROM m ORDER BY platform, month_start
+
+  - id: q6_top_videos
+    question: 上個月 Newsroom 在 YouTube 觀看數最高的 5 支影片是哪些？
+    expected:
+      scope: newsroom
+      metric: views（單則）
+      period: 上一個完整月份（依 YouTube 發布日）
+    must_mention:
+      - 附上影片標題與連結
+    must_not:
+      - 從 agg 表回答（agg 表沒有單則影片）
+    reference_sql: |
+      SELECT platform_title, link, publish_date, views
+      FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+      WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
+        AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
+      ORDER BY views DESC
+      LIMIT 5
+
+  - id: q7_ytd_total
+    question: 新聞部今年到目前為止總共有多少觀看？
+    expected:
+      scope: newsroom + talks + connected
+      metric: video_views
+      period: 今年 1 月 1 日至今
+    must_mention:
+      - 分平台列出
+      - 若給總和，註明各平台定義不同、只能看量級
+    must_not:
+      - 只給一個加總數字而不說明
+    reference_sql: |
+      SELECT platform, SUM(video_views) AS video_views, SUM(post_count) AS post_count
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      WHERE month_start >= DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), YEAR)
+      GROUP BY platform ORDER BY platform
