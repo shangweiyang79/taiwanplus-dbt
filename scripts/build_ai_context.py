@@ -21,14 +21,16 @@ OUT_DIR = os.path.join(ROOT, "ai_context")
 OUT_FILE = os.path.join(OUT_DIR, "news_dept_social_context.md")
 
 PROJECT = "taiwanplus_dbt"
-# 給 AI 看的表，依重要性排序
+# 給 AI 看的表，依重要性排序：總體成效（每日流量）→ 原因分析（影片層）→ 對照表
 TABLES = [
+    "agg_news_dept_daily_traffic_monthly",
+    "fct_daily_traffic",
     "agg_news_dept_social_monthly",
     "fct_social_post_performance",
     "dept_accounts",
     "platform_metric_glossary",
+    "youtube_channels",
 ]
-FACT = "fct_social_post_performance"
 
 
 def parse_prod():
@@ -76,6 +78,17 @@ def filters_of(obj):
     return [render_filter(w["where_sql_template"]) for w in obj.get("where_filters", [])]
 
 
+def metric_model(metrics, name):
+    """metric 所屬的 semantic model 名稱與預設時間欄位；ratio 依分子。"""
+    m = metrics[name]
+    if m["type"] == "simple":
+        params = m["type_params"]["metric_aggregation_params"]
+        return params["semantic_model"], params["agg_time_dimension"]
+    if m["type"] == "ratio":
+        return metric_model(metrics, m["type_params"]["numerator"]["name"])
+    raise ValueError(f"尚未支援的 metric 類型：{m['type']}（{name}）")
+
+
 def metric_sql(metrics, name):
     m = metrics[name]
     tp = m["type_params"]
@@ -95,21 +108,23 @@ def metric_sql(metrics, name):
     raise ValueError(f"尚未支援的 metric 類型：{m['type']}（{name}）")
 
 
-def group_by_sql(item):
+def group_by_sql(item, time_column):
     """TimeDimension('metric_time', 'month') / Dimension('post__platform') → (select 運算式, 別名)"""
     t = re.match(r"TimeDimension\('metric_time',\s*'(\w+)'\)", item)
     if t:
         grain = t.group(1)
-        return f"DATE_TRUNC(publish_date, {grain.upper()})", f"{grain}_start"
+        return f"DATE_TRUNC({time_column}, {grain.upper()})", f"{grain}_start"
     d = re.match(r"Dimension\('(?:\w+__)?(\w+)'\)", item)
     if d:
         return d.group(1), d.group(1)
     raise ValueError(f"尚未支援的 group_by：{item}")
 
 
-def saved_query_sql(sq, metrics, fact_relation):
+def saved_query_sql(sq, metrics, model_relations):
     qp = sq["query_params"]
-    groups = [group_by_sql(g) for g in qp["group_by"]]
+    model, time_column = metric_model(metrics, qp["metrics"][0])
+    fact_relation = model_relations[model]
+    groups = [group_by_sql(g, time_column) for g in qp["group_by"]]
     select = [f"  {expr} AS {alias}" if expr != alias else f"  {expr}" for expr, alias in groups]
     select += [f"  {metric_sql(metrics, m)} AS {m}" for m in qp["metrics"]]
     where = filters_of(qp.get("where"))
@@ -141,7 +156,10 @@ def main():
     manifest = load("manifest.json")
     sem = load("semantic_manifest.json")
     metrics = {m["name"]: m for m in sem["metrics"]}
-    fact_relation = relation(find_node(manifest, FACT))
+    model_relations = {
+        sm["name"]: f"`{sm['node_relation']['database']}.{sm['node_relation']['schema_name']}.{sm['node_relation']['alias']}`"
+        for sm in sem["semantic_models"]
+    }
 
     md = [
         "# TaiwanPlus 新聞部社群成效：AI 查詢說明",
@@ -156,7 +174,11 @@ def main():
         "",
         doc(manifest, "news_dept_definition"),
         "",
-        "### 影片觀看數（社群成效的預設指標）",
+        "### 每日流量與影片層（兩種觀看數）",
+        "",
+        doc(manifest, "traffic_vs_video_level"),
+        "",
+        "### 各平台觀看的計算門檻",
         "",
         doc(manifest, "video_views_definition"),
         "",
@@ -184,15 +206,18 @@ def main():
     md += [
         "## 4. 指標與對應 SQL",
         "",
-        f"以下運算式都是對 {fact_relation} 的聚合；`agg_news_dept_social_monthly` 已用同樣方式算好逐月結果。",
+        "每個指標都是對「所屬表」的聚合。逐月結果已分別算好在 `agg_news_dept_daily_traffic_monthly`（每日流量）"
+        "與 `agg_news_dept_social_monthly`（影片層）。",
         "",
-        "| 指標 | 名稱 | SQL | 說明 |",
-        "|---|---|---|---|",
+        "| 指標 | 名稱 | 所屬表 | SQL | 說明 |",
+        "|---|---|---|---|---|",
     ]
-    for name in sorted(metrics):
+    for name in sorted(metrics, key=lambda n: (metric_model(metrics, n)[0] != "daily_traffic", n)):
         m = metrics[name]
-        desc = "解讀規則見 §1" if name == "video_views" else first_paragraph(m.get("description") or "")
-        md.append(f"| `{name}` | {m.get('label') or ''} | `{metric_sql(metrics, name)}` | {desc} |")
+        model, _ = metric_model(metrics, name)
+        table = model_relations[model].split(".")[-1].rstrip("`")
+        desc = "兩層差異見 §1" if name == "traffic_views" else first_paragraph(m.get("description") or "")
+        md.append(f"| `{name}` | {m.get('label') or ''} | `{table}` | `{metric_sql(metrics, name)}` | {desc} |")
     md.append("")
 
     md += ["## 5. 預設查詢", ""]
@@ -203,7 +228,7 @@ def main():
             first_paragraph(sq.get("description") or ""),
             "",
             "```sql",
-            saved_query_sql(sq, metrics, fact_relation),
+            saved_query_sql(sq, metrics, model_relations),
             "```",
             "",
         ]
@@ -218,6 +243,10 @@ def main():
         "### platform_metric_glossary（指標 × 平台）",
         "",
         csv_table(os.path.join(ROOT, "seeds", "platform_metric_glossary.csv")),
+        "",
+        "### youtube_channels（YouTube 頻道 × 單位）",
+        "",
+        csv_table(os.path.join(ROOT, "seeds", "youtube_channels.csv")),
         "",
     ]
 

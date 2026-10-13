@@ -37,3 +37,16 @@ seeds:
         description: 能否直接跨平台比較絕對值。
       - name: note
         description: 備註。
+
+  - name: youtube_channels
+    description: 新聞部 YouTube 頻道 → 單位對照，每日流量層用它把頻道歸到 newsroom / talks / connected。
+    columns:
+      - name: channel_id
+        description: YouTube 頻道 ID。
+        data_tests: [unique, not_null]
+      - name: channel_name
+        description: 頻道名稱。
+      - name: dept_scope
+        description: "{{ doc('dept_scope') }}"
+      - name: note
+        description: 備註。

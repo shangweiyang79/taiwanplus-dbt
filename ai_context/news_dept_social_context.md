@@ -17,7 +17,27 @@
   - Connected：YouTube（CONNECTED on TaiwanPlus）；Instagram 於 2026-07-04 停更，歷史資料保留
 - 單位、平台、原表的完整對照見 seed `dept_accounts`。
 
-### 影片觀看數（社群成效的預設指標）
+### 每日流量與影片層（兩種觀看數）
+
+**新聞部的觀看數有兩層，口徑不同、數字不同，不能混用：**
+
+| | 每日流量（daily traffic） | 影片層（video level） |
+|---|---|---|
+| 意思 | 該期間內**實際發生**的觀看，不管影片何時發布 | 該期間**發布**的影片，到今天為止的**累計**觀看 |
+| 用途 | **總體成效（KPI）**：某月 / 某期間總共多少觀看、整體趨勢 | **原因分析**：哪些影片 / 主題 / 節目表現好、為什麼 |
+| 表 | `agg_news_dept_daily_traffic_monthly`、`fct_daily_traffic` | `agg_news_dept_social_monthly`、`fct_social_post_performance` |
+| 指標 | `traffic_views` | `video_views` |
+
+例（2026-09 實測）：YouTube Newsroom 的每日流量約為影片層的 1.5 倍；IG Talks 則相反，影片層約為每日流量的 2 倍。
+
+每日流量的資料限制：
+- 起始日：YouTube 2025-06-28、FB 2025-08-01、IG 2025-08-01、IG Stories 2025-09-14、X 2025-12-29。更早的期間沒有每日流量。
+- **IG 於 2026-06-01 換算法**：之前是各帳號每天 Total Plays 總和減前一天（`source_method = snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%，偶有負數；跨 6/1 比較 IG 趨勢時要說明。
+- IG 的 views 含影片類 Stories（`story_views` 另列）；YouTube / FB 含付費觀看（`paid_views` 另列）。
+- Connected 的 IG 停更後，舊貼文每天仍有觀看，所以每日流量不會是 0（影片層的新發布則是 0）。
+- TaiwanPlus Livestream 頻道的每日流量到 2026-08-05 為止。
+
+### 各平台觀看的計算門檻
 
 **影片觀看數，是「社群成效」的預設主指標。**
 
@@ -57,22 +77,27 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 
 ### 判斷指標
 
-- 「成效」「表現」「performance」沒指定指標時 → `video_views`（影片觀看數），並附上 `post_count`（貼文數）當背景。
+- 「成效」「表現」「performance」「總共多少觀看」沒指定指標時 → **每日流量的 `traffic_views`**（總體成效 KPI）。
+- 「為什麼」「原因」「哪些影片 / 主題 / 節目表現好」→ 影片層的 `video_views`，並附上 `post_count`。
 - 「互動」→ `engagements`；「互動率」→ `engagement_rate`；「觀看時長」→ `watch_time_hours`（X 沒有）。
 - 各平台的觀看指標原生名稱不同（YouTube Views、IG Plays、FB 3-second video views、X Video views），回答時要用統一名稱「影片觀看數」，必要時括號註明原生名稱。
-- **YouTube 一律以 Views 為主（KPI）**，同時附上 `engaged_views`（`yt_engaged_views`）作為輔助參考。期間跨過 2026-08-27 時（例如比較 7 月與 9 月），要說明 Views 的變化有一部分來自門檻放寬。
+- **YouTube 一律以 Views 為主（KPI）**，同時附上 engaged views（每日流量 `traffic_engaged_views`、影片層 `yt_engaged_views`）作為輔助參考。期間跨過 2026-08-27 時（例如比較 7 月與 9 月），要說明 Views 的變化有一部分來自門檻放寬。
 
 ### 判斷期間
 
 - 「近期」「最近」沒指定期間時 → **最近三個完整月份**；若也列出本月，必須標註「本月至今、尚未完整」。
-- 期間依各平台的發布日（`publish_date` / `month_start`）。
+- 每日流量的期間依**觀看發生日**（`date`）；影片層的期間依**影片發布日**（`publish_date`）。
 
 ### 選擇資料表
 
 | 問題類型 | 查哪張 |
 |---|---|
-| 新聞部 / 單位 / 平台的逐月成效（最常見） | `news_dept_social.agg_news_dept_social_monthly`，**直接讀，不要自己從明細加總** |
-| 自訂期間（某幾週、某幾天）、依主題 / 節目 / 直式切分、單則貼文排行 | `news_dept_social.fct_social_post_performance` |
+| **總體成效**：新聞部 / 單位 / 平台的逐月成效、趨勢、某月總共多少觀看（最常見） | `news_dept_social.agg_news_dept_daily_traffic_monthly`，**直接讀，不要自己從明細加總** |
+| 總體成效，但期間是自訂的（某幾週、某幾天） | `news_dept_social.fct_daily_traffic` |
+| **原因分析**：哪些影片表現最好、依主題 / 節目 / 直式切分、單則貼文排行 | `news_dept_social.fct_social_post_performance` |
+| 原因分析的逐月彙總（依發布月份） | `news_dept_social.agg_news_dept_social_monthly` |
+
+**問「為什麼」時兩層都要用**：先用每日流量說明總體變化，再用影片層找出貢獻最大的影片 / 主題，並說明兩層口徑不同（影片層是依發布日累計）。
 | 單位、平台、帳號對照，某帳號是否停更 | `news_dept_social.dept_accounts` |
 | 指標在各平台的原生欄位與定義 | `news_dept_social.platform_metric_glossary` |
 
@@ -84,15 +109,57 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 2. **不要用絕對值比較平台優劣**。比較請看各平台自己的逐月趨勢（例如月增率）。
    - 解釋 FB 數字為什麼最大時，原因是**菲律賓受眾**，不是「門檻低」（FB 的 3 秒門檻是四個平台中最嚴格的）。
 3. **YouTube 以 Views 為主、Engaged views 為輔**。期間跨過 2026-08-27 時，Views 的成長不能全部歸因於成效，要搭配 Engaged views 說明有多少來自定義放寬。
-4. 最新月份累計天數少、天生偏低，不要解讀成衰退。
+4. 影片層的最新月份累計天數少、天生偏低，不要解讀成衰退；每日流量的本月則是天數未滿（看 `days_with_data`）。
 5. 主動說明資料限制：
    - Connected 的 IG 於 2026-07-04 停更
    - Talks / Connected 沒有主題分類
    - X 沒有觀看時長
-   - YouTube 資料從 2026-01-01 起，Views 定義於 2026-08-27 變更
+   - YouTube Views 定義於 2026-08-27 變更；影片層 YouTube 資料從 2026-01-01 起
+   - IG 每日流量於 2026-06-01 換算法（之前偏高 10～20%）
+   - 每日流量各平台的起始日不同（見 §1），更早的期間沒有每日流量
 6. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
+7. **回答時寫明用的是哪一層**（「每日流量」或「影片層」），兩層的數字不要放在同一欄比較。
 
 ## 3. 資料表
+
+### `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+
+一列 = 月 × 新聞部單位 × 平台，新聞部「總體成效」的認證匯總表（每日流量）。 問總體成效、趨勢、某月總共多少觀看時直接讀這張，不要自己從明細加總。 **新聞部（News Department）= Newsroom + Talks + Connected 三個單位。**
+
+| 欄位 | 說明 |
+|---|---|
+| `month_start` | 月份第一天（依觀看發生日）。 |
+| `year_month` | 月份字串（YYYY-MM）。 |
+| `dept_scope` | 新聞部內的單位：`newsroom`（新聞台）、`talks`、`connected`。三者合起來就是「新聞部」。 |
+| `platform` | 社群平台：`YouTube`、`Instagram`、`Facebook`、`X`。 |
+| `views` | 影片觀看數，各平台定義不同（見 §1）。 |
+| `video_views_only` | 不含 Stories 的觀看數。 |
+| `story_views` | IG 影片類 Stories 的觀看數（只有 IG 有）。 |
+| `engaged_views` | YouTube 的 Engaged views（輔助參考）。KPI 仍是 views；跨 2026-08-27 比較時一併列出。 |
+| `paid_views` | 付費觀看，已包含在 views 裡。 |
+| `watch_time_hours` | 當月觀看時數。 |
+| `days_with_data` | 當月有資料的天數。少於當月天數代表資料不完整（例如本月、或資料起始月）。 |
+| `source_method` | 資料算法。IG 出現 snapshot_delta 代表 2026-06 之前的舊算法，通常比 API 偏高 10～20%。 |
+| `is_current_month` | 是否為本月（台北時間），本月資料不完整。 |
+
+### `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
+
+一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story），新聞部每日流量的主表。
+
+| 欄位 | 說明 |
+|---|---|
+| `traffic_uid` | 唯一鍵，格式為 `日期:單位:平台:內容類型`。 |
+| `date` | 觀看發生的日期（不是影片發布日）。 |
+| `year_month` | 月份字串（YYYY-MM）。 |
+| `month_start` | 月份第一天。 |
+| `dept_scope` | 新聞部內的單位：`newsroom`（新聞台）、`talks`、`connected`。三者合起來就是「新聞部」。 |
+| `platform` | 社群平台：`YouTube`、`Instagram`、`Facebook`、`X`。 |
+| `content_type` | 內容類型：`video`（影片 / reels）或 `story`（IG 影片類 Stories）。 |
+| `views` | 影片觀看數，各平台定義不同（見 §1）。 |
+| `paid_views` | 付費觀看（YouTube、FB、IG 有欄位；X 為 NULL）。 |
+| `engaged_views` | YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 views。 |
+| `watch_time_hours` | 當天的觀看時數。IG 為快照相減；FB 由分鐘換算；Stories 為 NULL。 |
+| `source_method` | 資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/ snapshot_delta（IG 2026-06-01 前）/ story_by_publish_date（IG Stories）。 |
 
 ### `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
 
@@ -174,54 +241,70 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `cross_platform_comparable` | 能否直接跨平台比較絕對值。 |
 | `note` | 備註。 |
 
+### `ivory-airfoil-418408.news_dept_social.youtube_channels`
+
+新聞部 YouTube 頻道 → 單位對照，每日流量層用它把頻道歸到 newsroom / talks / connected。
+
+| 欄位 | 說明 |
+|---|---|
+| `channel_id` | YouTube 頻道 ID。 |
+| `channel_name` | 頻道名稱。 |
+| `dept_scope` | 新聞部內的單位：`newsroom`（新聞台）、`talks`、`connected`。三者合起來就是「新聞部」。 |
+| `note` | 備註。 |
+
 ## 4. 指標與對應 SQL
 
-以下運算式都是對 `ivory-airfoil-418408.news_dept_social.fct_social_post_performance` 的聚合；`agg_news_dept_social_monthly` 已用同樣方式算好逐月結果。
+每個指標都是對「所屬表」的聚合。逐月結果已分別算好在 `agg_news_dept_daily_traffic_monthly`（每日流量）與 `agg_news_dept_social_monthly`（影片層）。
 
-| 指標 | 名稱 | SQL | 說明 |
-|---|---|---|---|
-| `avg_views_per_post` | 平均每則觀看數 | `SAFE_DIVIDE(SUM(views), COUNT(post_uid))` | 影片觀看數 / 影片貼文數。少數爆量貼文會把平均拉高，建議同時看中位數或最大值。 |
-| `engagement_rate` | 互動率 | `SAFE_DIVIDE(SUM(engagements), SUM(views))` | 互動數 / 影片觀看數。各平台觀看與互動定義都不同，只能在同一平台內比較。 |
-| `engagements` | 互動數 | `SUM(engagements)` | 互動數加總，各平台定義見 engagements 欄位說明。 |
-| `fb_video_views` | Facebook 3 秒觀看數 | `SUM(IF(platform = 'Facebook', views, NULL))` | Facebook 的 3-second video views（video_views_3s），播放滿 3 秒才計，是四個平台中門檻最嚴格的。 FB 數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低。 |
-| `ig_video_views` | Instagram 播放數 | `SUM(IF(platform = 'Instagram', views, NULL))` | Instagram 的 Plays（Total Plays，取最新快照）。 |
-| `impressions` | 曝光數（僅 YouTube） | `SUM(impressions)` | 縮圖曝光次數，只有 YouTube 有，不是跨平台指標。 |
-| `post_count` | 影片貼文數 | `COUNT(post_uid)` | 影片貼文數。 |
-| `video_views` | 影片觀看數 | `SUM(views)` | 解讀規則見 §1 |
-| `watch_time_hours` | 觀看時長（小時） | `SUM(watch_time_hours)` | 觀看時長加總。X 不提供，所以跨平台加總只含 YouTube + IG + FB。 |
-| `x_video_views` | X 影片觀看數 | `SUM(IF(platform = 'X', views, NULL))` | X 的 Video views（total_video_views）。 |
-| `yt_engaged_views` | YouTube Engaged views | `SUM(IF(platform = 'YouTube', engaged_views, NULL))` | YouTube 的 Engaged views，計算方式接近 2026-08-27 之前的舊 Views。 輔助參考用，KPI 仍是 yt_video_views；期間跨過 8/27 時一併列出，說明 Views 的變化有多少來自定義放寬。 |
-| `yt_video_views` | YouTube 觀看數 | `SUM(IF(platform = 'YouTube', views, NULL))` | YouTube 的 Views（total_views），是 KPI。2026-08-27 起門檻由約 30 秒放寬為約 1 秒， 跨 8/27 比較時另附 yt_engaged_views 參考。 |
+| 指標 | 名稱 | 所屬表 | SQL | 說明 |
+|---|---|---|---|---|
+| `traffic_engaged_views` | 每日流量 Engaged views（YouTube） | `fct_daily_traffic` | `SUM(engaged_views)` | YouTube 每天的 Engaged views，輔助參考用（KPI 仍是 traffic_views）。 |
+| `traffic_paid_views` | 每日流量付費觀看 | `fct_daily_traffic` | `SUM(paid_views)` | 付費觀看，已包含在 traffic_views 裡。 |
+| `traffic_story_views` | IG Stories 觀看數 | `fct_daily_traffic` | `SUM(IF(content_type = 'story', views, NULL))` | IG 影片類 Stories 的觀看，已包含在 traffic_views 裡。 |
+| `traffic_views` | 每日流量觀看數（總體成效 KPI） | `fct_daily_traffic` | `SUM(views)` | 兩層差異見 §1 |
+| `traffic_watch_time_hours` | 每日流量觀看時數 | `fct_daily_traffic` | `SUM(watch_time_hours)` | 當天的觀看時數加總（Stories 不含）。 |
+| `avg_views_per_post` | 平均每則觀看數 | `fct_social_post_performance` | `SAFE_DIVIDE(SUM(views), COUNT(post_uid))` | 影片觀看數 / 影片貼文數。少數爆量貼文會把平均拉高，建議同時看中位數或最大值。 |
+| `engagement_rate` | 互動率 | `fct_social_post_performance` | `SAFE_DIVIDE(SUM(engagements), SUM(views))` | 互動數 / 影片觀看數。各平台觀看與互動定義都不同，只能在同一平台內比較。 |
+| `engagements` | 互動數 | `fct_social_post_performance` | `SUM(engagements)` | 互動數加總，各平台定義見 engagements 欄位說明。 |
+| `fb_video_views` | Facebook 3 秒觀看數 | `fct_social_post_performance` | `SUM(IF(platform = 'Facebook', views, NULL))` | Facebook 的 3-second video views（video_views_3s），播放滿 3 秒才計，是四個平台中門檻最嚴格的。 FB 數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低。 |
+| `ig_video_views` | Instagram 播放數 | `fct_social_post_performance` | `SUM(IF(platform = 'Instagram', views, NULL))` | Instagram 的 Plays（Total Plays，取最新快照）。 |
+| `impressions` | 曝光數（僅 YouTube） | `fct_social_post_performance` | `SUM(impressions)` | 縮圖曝光次數，只有 YouTube 有，不是跨平台指標。 |
+| `post_count` | 影片貼文數 | `fct_social_post_performance` | `COUNT(post_uid)` | 影片貼文數。 |
+| `video_views` | 影片層觀看數（依發布日累計） | `fct_social_post_performance` | `SUM(views)` | 影片層：該期間「發布」的影片，到今天為止的累計觀看。用於影片 / 主題 / 節目 / 原因分析， 不用於總體成效（總體成效用 traffic_views）。各平台門檻見 platform_metric_glossary。 |
+| `watch_time_hours` | 觀看時長（小時） | `fct_social_post_performance` | `SUM(watch_time_hours)` | 觀看時長加總。X 不提供，所以跨平台加總只含 YouTube + IG + FB。 |
+| `x_video_views` | X 影片觀看數 | `fct_social_post_performance` | `SUM(IF(platform = 'X', views, NULL))` | X 的 Video views（total_video_views）。 |
+| `yt_engaged_views` | YouTube Engaged views | `fct_social_post_performance` | `SUM(IF(platform = 'YouTube', engaged_views, NULL))` | YouTube 的 Engaged views，計算方式接近 2026-08-27 之前的舊 Views。 輔助參考用，KPI 仍是 yt_video_views；期間跨過 8/27 時一併列出，說明 Views 的變化有多少來自定義放寬。 |
+| `yt_video_views` | YouTube 觀看數 | `fct_social_post_performance` | `SUM(IF(platform = 'YouTube', views, NULL))` | YouTube 的 Views（total_views），是 KPI。2026-08-27 起門檻由約 30 秒放寬為約 1 秒， 跨 8/27 比較時另附 yt_engaged_views 參考。 |
 
 ## 5. 預設查詢
 
 ### 新聞部社群成效（`news_dept_social_performance`）
 
-「新聞部社群成效」的預設答案：新聞部三個單位（Newsroom + Talks + Connected） 在四個平台的影片觀看數，依月份、單位、平台切分。 各平台觀看定義不同，請各平台看自己的趨勢，不要跨平台比較優劣。
+「新聞部社群成效」的預設答案：新聞部三個單位（Newsroom + Talks + Connected） 在四個平台的每日流量觀看數（當月實際發生的觀看），依月份、單位、平台切分。 各平台觀看門檻不同，請各平台看自己的趨勢，不要跨平台比較優劣。
 
 ```sql
 SELECT
-  DATE_TRUNC(publish_date, MONTH) AS month_start,
+  DATE_TRUNC(date, MONTH) AS month_start,
   dept_scope,
   platform,
-  SUM(views) AS video_views,
-  COUNT(post_uid) AS post_count
-FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+  SUM(views) AS traffic_views,
+  SUM(engaged_views) AS traffic_engaged_views
+FROM `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 ```
 
 ### Newsroom 社群成效（`newsroom_social_performance`）
 
-只看 Newsroom（新聞台）在四個平台的影片觀看數，依月份與平台切分。
+只看 Newsroom（新聞台）在四個平台的每日流量觀看數，依月份與平台切分。
 
 ```sql
 SELECT
-  DATE_TRUNC(publish_date, MONTH) AS month_start,
+  DATE_TRUNC(date, MONTH) AS month_start,
   platform,
-  SUM(views) AS video_views,
-  COUNT(post_uid) AS post_count
-FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+  SUM(views) AS traffic_views,
+  SUM(engaged_views) AS traffic_engaged_views
+FROM `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
 WHERE dept_scope = 'newsroom'
 GROUP BY 1, 2
 ORDER BY 1, 2
@@ -259,3 +342,13 @@ ORDER BY 1, 2
 | Instagram | engagements | Reels interactions + Shares |  | Reels 互動 + 分享 | false |  |
 | Facebook | engagements | engagements | Engagements | FB 原生互動數（心情 + 留言 + 分享） | false |  |
 | X | engagements | likes + comments_replies + shares_retweets |  | 按讚 + 回覆 + 轉推 | false | 不用 total_actions（不含留言，會低估約 5%） |
+
+### youtube_channels（YouTube 頻道 × 單位）
+
+| channel_id | channel_name | dept_scope | note |
+|---|---|---|---|
+| UCCJBSLNtozkO-NqjpPZujiQ | TaiwanPlus News | newsroom |  |
+| UC7c6rvyAZLpKGk8ttVnpnLA | TaiwanPlus Livestream | newsroom | 每日流量資料到 2026-08-05 為止，最後一支影片發布於 2026-07-16 |
+| UComl1gAjeqAAiRR6s3ae73w | Taiwan Explained by TaiwanPlus | newsroom |  |
+| UCSyJ1WvirdmrMY8rpnT41LA | Taiwan Talks | talks |  |
+| UC1oUAE7Bj5o6zEGm0Hq4BdA | CONNECTED on TaiwanPlus | connected |  |

@@ -47,6 +47,38 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 {% enddocs %}
 
 
+{% docs traffic_vs_video_level %}
+**新聞部的觀看數有兩層，口徑不同、數字不同，不能混用：**
+
+| | 每日流量（daily traffic） | 影片層（video level） |
+|---|---|---|
+| 意思 | 該期間內**實際發生**的觀看，不管影片何時發布 | 該期間**發布**的影片，到今天為止的**累計**觀看 |
+| 用途 | **總體成效（KPI）**：某月 / 某期間總共多少觀看、整體趨勢 | **原因分析**：哪些影片 / 主題 / 節目表現好、為什麼 |
+| 表 | `agg_news_dept_daily_traffic_monthly`、`fct_daily_traffic` | `agg_news_dept_social_monthly`、`fct_social_post_performance` |
+| 指標 | `traffic_views` | `video_views` |
+
+例（2026-09 實測）：YouTube Newsroom 的每日流量約為影片層的 1.5 倍；IG Talks 則相反，影片層約為每日流量的 2 倍。
+
+每日流量的資料限制：
+- 起始日：YouTube 2025-06-28、FB 2025-08-01、IG 2025-08-01、IG Stories 2025-09-14、X 2025-12-29。更早的期間沒有每日流量。
+- **IG 於 2026-06-01 換算法**：之前是各帳號每天 Total Plays 總和減前一天（`source_method = snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%，偶有負數；跨 6/1 比較 IG 趨勢時要說明。
+- IG 的 views 含影片類 Stories（`story_views` 另列）；YouTube / FB 含付費觀看（`paid_views` 另列）。
+- Connected 的 IG 停更後，舊貼文每天仍有觀看，所以每日流量不會是 0（影片層的新發布則是 0）。
+- TaiwanPlus Livestream 頻道的每日流量到 2026-08-05 為止。
+{% enddocs %}
+
+
+{% docs fct_daily_traffic %}
+一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story），新聞部每日流量的主表。
+
+{{ doc('news_dept_definition') }}
+
+{{ doc('traffic_vs_video_level') }}
+
+{{ doc('video_views_definition') }}
+{% enddocs %}
+
+
 {% docs ai_answering_guide %}
 ### 判斷範圍
 
@@ -60,22 +92,27 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 
 ### 判斷指標
 
-- 「成效」「表現」「performance」沒指定指標時 → `video_views`（影片觀看數），並附上 `post_count`（貼文數）當背景。
+- 「成效」「表現」「performance」「總共多少觀看」沒指定指標時 → **每日流量的 `traffic_views`**（總體成效 KPI）。
+- 「為什麼」「原因」「哪些影片 / 主題 / 節目表現好」→ 影片層的 `video_views`，並附上 `post_count`。
 - 「互動」→ `engagements`；「互動率」→ `engagement_rate`；「觀看時長」→ `watch_time_hours`（X 沒有）。
 - 各平台的觀看指標原生名稱不同（YouTube Views、IG Plays、FB 3-second video views、X Video views），回答時要用統一名稱「影片觀看數」，必要時括號註明原生名稱。
-- **YouTube 一律以 Views 為主（KPI）**，同時附上 `engaged_views`（`yt_engaged_views`）作為輔助參考。期間跨過 2026-08-27 時（例如比較 7 月與 9 月），要說明 Views 的變化有一部分來自門檻放寬。
+- **YouTube 一律以 Views 為主（KPI）**，同時附上 engaged views（每日流量 `traffic_engaged_views`、影片層 `yt_engaged_views`）作為輔助參考。期間跨過 2026-08-27 時（例如比較 7 月與 9 月），要說明 Views 的變化有一部分來自門檻放寬。
 
 ### 判斷期間
 
 - 「近期」「最近」沒指定期間時 → **最近三個完整月份**；若也列出本月，必須標註「本月至今、尚未完整」。
-- 期間依各平台的發布日（`publish_date` / `month_start`）。
+- 每日流量的期間依**觀看發生日**（`date`）；影片層的期間依**影片發布日**（`publish_date`）。
 
 ### 選擇資料表
 
 | 問題類型 | 查哪張 |
 |---|---|
-| 新聞部 / 單位 / 平台的逐月成效（最常見） | `news_dept_social.agg_news_dept_social_monthly`，**直接讀，不要自己從明細加總** |
-| 自訂期間（某幾週、某幾天）、依主題 / 節目 / 直式切分、單則貼文排行 | `news_dept_social.fct_social_post_performance` |
+| **總體成效**：新聞部 / 單位 / 平台的逐月成效、趨勢、某月總共多少觀看（最常見） | `news_dept_social.agg_news_dept_daily_traffic_monthly`，**直接讀，不要自己從明細加總** |
+| 總體成效，但期間是自訂的（某幾週、某幾天） | `news_dept_social.fct_daily_traffic` |
+| **原因分析**：哪些影片表現最好、依主題 / 節目 / 直式切分、單則貼文排行 | `news_dept_social.fct_social_post_performance` |
+| 原因分析的逐月彙總（依發布月份） | `news_dept_social.agg_news_dept_social_monthly` |
+
+**問「為什麼」時兩層都要用**：先用每日流量說明總體變化，再用影片層找出貢獻最大的影片 / 主題，並說明兩層口徑不同（影片層是依發布日累計）。
 | 單位、平台、帳號對照，某帳號是否停更 | `news_dept_social.dept_accounts` |
 | 指標在各平台的原生欄位與定義 | `news_dept_social.platform_metric_glossary` |
 
@@ -87,13 +124,16 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 2. **不要用絕對值比較平台優劣**。比較請看各平台自己的逐月趨勢（例如月增率）。
    - 解釋 FB 數字為什麼最大時，原因是**菲律賓受眾**，不是「門檻低」（FB 的 3 秒門檻是四個平台中最嚴格的）。
 3. **YouTube 以 Views 為主、Engaged views 為輔**。期間跨過 2026-08-27 時，Views 的成長不能全部歸因於成效，要搭配 Engaged views 說明有多少來自定義放寬。
-4. 最新月份累計天數少、天生偏低，不要解讀成衰退。
+4. 影片層的最新月份累計天數少、天生偏低，不要解讀成衰退；每日流量的本月則是天數未滿（看 `days_with_data`）。
 5. 主動說明資料限制：
    - Connected 的 IG 於 2026-07-04 停更
    - Talks / Connected 沒有主題分類
    - X 沒有觀看時長
-   - YouTube 資料從 2026-01-01 起，Views 定義於 2026-08-27 變更
+   - YouTube Views 定義於 2026-08-27 變更；影片層 YouTube 資料從 2026-01-01 起
+   - IG 每日流量於 2026-06-01 換算法（之前偏高 10～20%）
+   - 每日流量各平台的起始日不同（見 §1），更早的期間沒有每日流量
 6. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
+7. **回答時寫明用的是哪一層**（「每日流量」或「影片層」），兩層的數字不要放在同一欄比較。
 {% enddocs %}
 
 

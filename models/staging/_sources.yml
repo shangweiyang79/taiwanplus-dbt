@@ -30,10 +30,29 @@ sources:
               - accepted_values:
                   arguments:
                     values: ['newsroom', 'talks', 'connected']
+      - name: daily_detailed_summary
+        description: >
+          YouTube 頻道 × 日的每日流量（date 為 YYYYMMDD 字串），含 19 個頻道，新聞部只取 seed youtube_channels 裡的 5 個。
+          total_views 含付費（paid_views）。
+        config:
+          loaded_at_field: "CAST(PARSE_DATE('%Y%m%d', date) AS TIMESTAMP)"
+          freshness:
+            warn_after: {count: 5, period: day}
+            error_after: {count: 10, period: day}
       - name: video_news_category
         description: >
           雲端分類 pipeline（Cloud Run news-classify-monthly，每月 5 號）寫入的 YouTube 影片主題分類，
           以 YouTube video_id 為主鍵。source = 'shorts_gemini' 的是 Shorts，分類另由 social_hub.yt_shorts 提供。
+
+  - name: youtube_owner
+    database: ivory-airfoil-418408
+    schema: youtube_taiwanplus_owner
+    description: YouTube Reporting API 的 content owner 報表（BQ Data Transfer 每日匯入）。
+    tables:
+      - name: p_content_owner_basic_a4_owner
+        description: 影片 × 日的基本指標（views、engaged_views…），date 為 YYYYMMDD 字串。用來算每日 engaged views。
+      - name: p_content_owner_video_metadata_a4_owner
+        description: 影片 metadata（含 channel_id），依 _PARTITIONDATE 每日快照，取最新分區。
 
   - name: instagram
     database: ivory-airfoil-418408
@@ -49,6 +68,22 @@ sources:
         description: Newsroom 的 IG 帳號。
       - name: Talks
         description: Talks 的 IG 帳號。沒有 caption / thumbnail_url 欄位。
+      - name: daily_ig_summary_report
+        description: >
+          IG 每日流量（舊算法，2026-06-01 之前使用）：各帳號每天的 Total Plays 總和減去前一天。
+          和官方 API 重疊期間通常偏高 10～20%，偶有負數（快照異常）。News / Talks / Connected / Social(Program) 為欄。
+        config:
+          freshness: null
+      - name: daily_ig_summary_report_new
+        description: >
+          IG 每日流量（2026-06-01 起）：觀看來自官方 API（account_daily_insights），時數仍是快照相減。
+          News / Talks / Connected / Social(Program) 為欄；Program 不屬於新聞部。
+        config:
+          loaded_at_field: "CAST(Date AS TIMESTAMP)"
+      - name: ig_stories_pivot_daily
+        description: IG Stories 每日觀看（只含影片類 Stories），News / Talks / Connected / Social 為欄。
+        config:
+          loaded_at_field: "CAST(date AS TIMESTAMP)"
       - name: Connected
         description: >
           Connected 的 IG 帳號，2026-07-04 停更（實測最後一則 reel 發布於 2026-07-10），歷史資料保留。
@@ -60,6 +95,15 @@ sources:
     database: ivory-airfoil-418408
     schema: Facebook_data
     tables:
+      - name: TaiwanPlus_news
+        description: >
+          Newsroom FB 粉專 × 日的每日流量。page_video_views 為 3 秒觀看（含付費，另有 page_video_views_paid）；
+          page_video_view_time 實測推斷單位為分鐘（2026-09 平均每次約 25 秒）。
+        config:
+          loaded_at_field: "CAST(date AS TIMESTAMP)"
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
       - name: TaiwanPlus_news_videos
         description: Newsroom 的 FB 影片，一列一支影片，數字為累計值。
         config:
@@ -75,6 +119,13 @@ sources:
     database: ivory-airfoil-418408
     schema: X_data
     tables:
+      - name: daily_traffic
+        description: Newsroom X 帳號 × 日的每日流量（x_daily_traffic_bq.py 每週二寫入，同一天保留最新一次匯出）。
+        config:
+          loaded_at_field: "CAST(date AS TIMESTAMP)"
+          freshness:
+            warn_after: {count: 9, period: day}
+            error_after: {count: 16, period: day}
       - name: post_metrics
         description: Newsroom 的 X 貼文成效，x_analytics_bq.py 每週由 X 後台匯出檔寫入，一列一則貼文。
         config:

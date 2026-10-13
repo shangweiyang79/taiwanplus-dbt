@@ -24,17 +24,19 @@ profile 放在 `~/.dbt/profiles.yml`，不進版控。
 |---|---|
 | `models/staging/` | 各平台原表統一欄位，加上 `dept_scope` |
 | `models/intermediate/` | 四平台疊成長表、post_map 去重 |
-| `models/marts/fct_social_post_performance` | **新聞部社群成效主表**（三個單位 × 四個平台），semantic layer 建在這裡 |
+| `models/marts/agg_news_dept_daily_traffic_monthly`、`fct_daily_traffic` | **每日流量**（當期實際發生的觀看），**總體成效 KPI** 用這層 |
+| `models/marts/fct_social_post_performance`、`agg_news_dept_social_monthly` | **影片層**（依發布日累計），原因分析 / 找表現好的影片用這層 |
 | `models/social_hub/` | 與舊 `social_hub` view 同名的相容層（只有 Newsroom），給 Looker Studio |
 | `models/docs/_definitions.md` | 「新聞部」「影片觀看」等定義，**改定義只改這裡** |
 | `seeds/dept_accounts.csv` | 單位 × 平台 × 原表對照 |
+| `seeds/youtube_channels.csv` | YouTube 頻道 → 單位對照（每日流量層用） |
 | `seeds/platform_metric_glossary.csv` | 各平台指標的原生欄位與名稱對照 |
 | `tests/` | walkthrough §3.6 的哨兵檢查 |
 | `scripts/reconcile_social_hub.py` | 逐列對帳 dbt 版與舊版 13 張 `social_hub` view（`python scripts/reconcile_social_hub.py --new <dataset> --old <dataset>`） |
 
 ## Semantic layer
 
-- 主指標是 `video_views`（影片觀看數），預設範圍是新聞部三個單位。
+- 總體成效 KPI 是每日流量的 `traffic_views`；影片層的 `video_views` 用於原因分析。預設範圍是新聞部三個單位。
 - 預設問題對應的 saved query：
   - `news_dept_social_performance`：新聞部社群成效
   - `newsroom_social_performance`：只看 Newsroom

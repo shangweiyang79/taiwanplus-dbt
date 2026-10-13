@@ -139,8 +139,10 @@ models:
 
     metrics:
       - name: video_views
-        label: 影片觀看數
-        description: "{{ doc('video_views_definition') }}"
+        label: 影片層觀看數（依發布日累計）
+        description: >
+          影片層：該期間「發布」的影片，到今天為止的累計觀看。用於影片 / 主題 / 節目 / 原因分析，
+          不用於總體成效（總體成效用 traffic_views）。各平台門檻見 platform_metric_glossary。
         type: simple
         agg: sum
         expr: views
@@ -270,31 +272,172 @@ models:
       - name: days_since_month_end
         description: 該月最後一天距今幾天。負數 = 本月尚未結束；數字愈小，累計愈不完整。
 
+  - name: fct_daily_traffic
+    description: "{{ doc('fct_daily_traffic') }}"
+
+    semantic_model:
+      enabled: true
+      name: daily_traffic
+    agg_time_dimension: date
+
+    columns:
+      - name: traffic_uid
+        description: 唯一鍵，格式為 `日期:單位:平台:內容類型`。
+        entity:
+          name: traffic
+          type: primary
+        data_tests: [unique, not_null]
+      - name: date
+        description: 觀看發生的日期（不是影片發布日）。
+        granularity: day
+        dimension:
+          type: time
+        data_tests: [not_null]
+      - name: year_month
+        description: 月份字串（YYYY-MM）。
+      - name: month_start
+        description: 月份第一天。
+      - name: dept_scope
+        description: "{{ doc('dept_scope') }}"
+        dimension:
+          type: categorical
+          label: 新聞部單位
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['newsroom', 'talks', 'connected']
+      - name: platform
+        description: "{{ doc('platform') }}"
+        dimension:
+          type: categorical
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['YouTube', 'Instagram', 'Facebook', 'X']
+      - name: content_type
+        description: 內容類型：`video`（影片 / reels）或 `story`（IG 影片類 Stories）。
+        dimension:
+          type: categorical
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['video', 'story']
+      - name: views
+        description: >
+          當天實際發生的觀看數，是總體成效的 KPI。YouTube / FB 含付費觀看；IG 2026-06-01 之前為快照相減（偏高 10～20%，偶有負數）。
+          各平台門檻不同，不可跨平台比較優劣。
+      - name: paid_views
+        description: 付費觀看（YouTube、FB、IG 有欄位；X 為 NULL）。
+      - name: engaged_views
+        description: YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 views。
+      - name: watch_time_hours
+        description: 當天的觀看時數。IG 為快照相減；FB 由分鐘換算；Stories 為 NULL。
+      - name: source_method
+        description: >
+          資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/
+          snapshot_delta（IG 2026-06-01 前）/ story_by_publish_date（IG Stories）。
+        dimension:
+          type: categorical
+
+    metrics:
+      - name: traffic_views
+        label: 每日流量觀看數（總體成效 KPI）
+        description: "{{ doc('traffic_vs_video_level') }}"
+        type: simple
+        agg: sum
+        expr: views
+
+      - name: traffic_engaged_views
+        label: 每日流量 Engaged views（YouTube）
+        description: YouTube 每天的 Engaged views，輔助參考用（KPI 仍是 traffic_views）。
+        type: simple
+        agg: sum
+        expr: engaged_views
+
+      - name: traffic_story_views
+        label: IG Stories 觀看數
+        description: IG 影片類 Stories 的觀看，已包含在 traffic_views 裡。
+        type: simple
+        agg: sum
+        expr: views
+        filter: "{{ Dimension('traffic__content_type') }} = 'story'"
+
+      - name: traffic_paid_views
+        label: 每日流量付費觀看
+        description: 付費觀看，已包含在 traffic_views 裡。
+        type: simple
+        agg: sum
+        expr: paid_views
+
+      - name: traffic_watch_time_hours
+        label: 每日流量觀看時數
+        description: 當天的觀看時數加總（Stories 不含）。
+        type: simple
+        agg: sum
+        expr: watch_time_hours
+
+  - name: agg_news_dept_daily_traffic_monthly
+    description: >
+      一列 = 月 × 新聞部單位 × 平台，新聞部「總體成效」的認證匯總表（每日流量）。
+      問總體成效、趨勢、某月總共多少觀看時直接讀這張，不要自己從明細加總。
+      {{ doc('news_dept_definition') }}
+      {{ doc('traffic_vs_video_level') }}
+    columns:
+      - name: month_start
+        description: 月份第一天（依觀看發生日）。
+        data_tests: [not_null]
+      - name: year_month
+        description: 月份字串（YYYY-MM）。
+      - name: dept_scope
+        description: "{{ doc('dept_scope') }}"
+      - name: platform
+        description: "{{ doc('platform') }}"
+      - name: views
+        description: 當月實際發生的觀看數，總體成效的 KPI（IG 含 Stories；YouTube / FB 含付費）。
+      - name: video_views_only
+        description: 不含 Stories 的觀看數。
+      - name: story_views
+        description: IG 影片類 Stories 的觀看數（只有 IG 有）。
+      - name: engaged_views
+        description: YouTube 的 Engaged views（輔助參考）。KPI 仍是 views；跨 2026-08-27 比較時一併列出。
+      - name: paid_views
+        description: 付費觀看，已包含在 views 裡。
+      - name: watch_time_hours
+        description: 當月觀看時數。
+      - name: days_with_data
+        description: 當月有資料的天數。少於當月天數代表資料不完整（例如本月、或資料起始月）。
+      - name: source_method
+        description: 資料算法。IG 出現 snapshot_delta 代表 2026-06 之前的舊算法，通常比 API 偏高 10～20%。
+      - name: is_current_month
+        description: 是否為本月（台北時間），本月資料不完整。
+
 saved_queries:
   - name: news_dept_social_performance
     label: 新聞部社群成效
     description: >
       「新聞部社群成效」的預設答案：新聞部三個單位（Newsroom + Talks + Connected）
-      在四個平台的影片觀看數，依月份、單位、平台切分。
-      各平台觀看定義不同，請各平台看自己的趨勢，不要跨平台比較優劣。
+      在四個平台的每日流量觀看數（當月實際發生的觀看），依月份、單位、平台切分。
+      各平台觀看門檻不同，請各平台看自己的趨勢，不要跨平台比較優劣。
     query_params:
       metrics:
-        - video_views
-        - post_count
+        - traffic_views
+        - traffic_engaged_views
       group_by:
         - "TimeDimension('metric_time', 'month')"
-        - "Dimension('post__dept_scope')"
-        - "Dimension('post__platform')"
+        - "Dimension('traffic__dept_scope')"
+        - "Dimension('traffic__platform')"
 
   - name: newsroom_social_performance
     label: Newsroom 社群成效
-    description: 只看 Newsroom（新聞台）在四個平台的影片觀看數，依月份與平台切分。
+    description: 只看 Newsroom（新聞台）在四個平台的每日流量觀看數，依月份與平台切分。
     query_params:
       metrics:
-        - video_views
-        - post_count
+        - traffic_views
+        - traffic_engaged_views
       group_by:
         - "TimeDimension('metric_time', 'month')"
-        - "Dimension('post__platform')"
+        - "Dimension('traffic__platform')"
       where:
-        - "{{ Dimension('post__dept_scope') }} = 'newsroom'"
+        - "{{ Dimension('traffic__dept_scope') }} = 'newsroom'"

@@ -2,33 +2,37 @@
 #
 # 每題的 reference_sql 是標準答案的算法（資料每天在變，所以存 SQL 不存數字）。
 # 執行 python scripts/run_eval_reference.py 會跑出當下的標準答案，再拿 chatbot 的回答來比對：
-#   - 範圍、指標、期間是否正確（expected）
+#   - 層級（每日流量 / 影片層）、範圍、指標、期間是否正確（expected）
 #   - 是否提到 must_mention、是否避開 must_not
 #   - 數字是否與標準答案一致
+#
+# 層級規則：問總體成效 → 每日流量（agg_news_dept_daily_traffic_monthly）；
+#           問原因 / 哪些影片 → 影片層（fct_social_post_performance）。
 
 questions:
   - id: q1_news_dept_recent
     question: 新聞部近期社群成效如何？
     expected:
+      layer: 每日流量
       scope: newsroom + talks + connected
-      metric: video_views（附 post_count）
+      metric: traffic_views（YouTube 附 engaged views）
       period: 最近三個完整月份
     must_mention:
       - 包含 Newsroom、Talks、Connected 三個單位
       - 各平台分開列出
       - 各平台觀看門檻不同
-      - Connected 的 IG 已停更
+      - 數字是每日流量（當月實際發生的觀看）
       - YouTube 以 Views 為主，附 engaged views 參考，並說明 2026-08-27 門檻放寬的影響
+      - IG 含影片類 Stories
     must_not:
+      - 用影片層（依發布月份累計）的數字回答總體成效
       - 只回答 Newsroom
+      - 用四平台加總的單一數字當主結論
       - 說 FB 數字大是因為門檻低
       - 不提 8/27 門檻放寬，就把 YouTube Views 的成長當成表現變好
-      - 用 engaged views 取代 Views 當主要數字
-      - 用四平台加總的單一數字當主結論
-      - 用絕對值說某平台表現最好
     reference_sql: |
-      SELECT year_month, dept_scope, platform, video_views, post_count
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      SELECT year_month, dept_scope, platform, views, story_views, engaged_views, days_with_data, source_method
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
         AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
       ORDER BY dept_scope, platform, year_month
@@ -36,27 +40,32 @@ questions:
   - id: q2_newsroom_yt_last_month
     question: Newsroom 上個月 YouTube 的觀看數是多少？
     expected:
+      layer: 每日流量
       scope: newsroom
-      metric: video_views（YouTube Views）
+      metric: traffic_views（YouTube Views），附 engaged views
       period: 上一個完整月份
     must_mention:
       - 只算 Newsroom（TaiwanPlus News / Livestream / Explained 三個頻道）
+      - 是當月實際發生的觀看
     must_not:
       - 把 Talks 或 Connected 的 YouTube 算進去
+      - 用影片層（上個月發布的影片累計觀看）回答
     reference_sql: |
-      SELECT year_month, video_views, post_count
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      SELECT year_month, views, engaged_views, days_with_data
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
 
   - id: q3_talks_ig_engagement_rate
     question: Talks 今年 IG 的互動率是多少？
     expected:
+      layer: 影片層（每日流量沒有互動數）
       scope: talks
       metric: engagement_rate = SUM(engagements) / SUM(views)
-      period: 今年 1 月 1 日至今
+      period: 今年 1 月 1 日至今發布的 reels
     must_mention:
       - 互動率是整體加總後相除，不是各月互動率的平均
+      - 這是依發布日的影片層數字
     must_not:
       - 把各月的 engagement_rate 直接平均
       - 拿去和其他平台的互動率比較優劣
@@ -70,24 +79,31 @@ questions:
   - id: q4_connected_ig_recent
     question: Connected 最近在 IG 的表現怎麼樣？
     expected:
+      layer: 每日流量 + 帳號狀態
       scope: connected
-      metric: video_views
+      metric: traffic_views
       period: 最近三個完整月份
     must_mention:
-      - Connected 的 IG 已於 2026-07-04 停更，所以近期沒有新貼文
+      - Connected 的 IG 已於 2026-07-04 停更，沒有新貼文
+      - 停更後舊貼文每天仍有少量觀看（每日流量不是 0）
       - 若要看 Connected 近期表現，應改看 YouTube
     must_not:
-      - 把沒有資料解讀成「表現很差」
+      - 把觀看下滑解讀成「表現很差」
     reference_sql: |
-      SELECT dept_scope, platform, account_label, active_to, note
-      FROM `ivory-airfoil-418408.news_dept_social.dept_accounts`
-      WHERE dept_scope = 'connected'
+      SELECT a.year_month, a.views, a.story_views, d.active_to, d.note
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly` a
+      JOIN `ivory-airfoil-418408.news_dept_social.dept_accounts` d USING (dept_scope, platform)
+      WHERE a.dept_scope = 'connected' AND a.platform = 'Instagram'
+        AND a.month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
+        AND a.month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
+      ORDER BY a.year_month
 
   - id: q5_best_platform
     question: 新聞部哪個平台表現最好？
     expected:
+      layer: 每日流量
       scope: newsroom + talks + connected
-      metric: video_views 的各平台自身趨勢（例如月增率），不是絕對值
+      metric: traffic_views 的各平台自身趨勢（月增率），不是絕對值
       period: 最近三個完整月份
     must_mention:
       - 各平台觀看門檻與受眾不同，無法直接用絕對值比較
@@ -98,19 +114,17 @@ questions:
       - 說 FB 數字大是因為門檻低
       - 不提 8/27 門檻放寬，就用 YouTube Views 的月增率下結論
     reference_sql: |
-      -- mom_growth 用 KPI（video_views）；YouTube 另附 engaged_mom_growth 參考（跨 8/27）
+      -- mom_growth 用 KPI（views）；YouTube 另附 engaged_mom_growth 參考（跨 8/27）
       WITH m AS (
-        SELECT month_start, platform,
-               SUM(video_views) AS video_views,
-               SUM(engaged_views) AS engaged_views
-        FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+        SELECT month_start, platform, SUM(views) AS views, SUM(engaged_views) AS engaged_views
+        FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
         WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
           AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
         GROUP BY 1, 2
       )
-      SELECT platform, FORMAT_DATE('%Y-%m', month_start) AS year_month, video_views, engaged_views,
-             SAFE_DIVIDE(video_views - LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start),
-                         LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start)) AS mom_growth,
+      SELECT platform, FORMAT_DATE('%Y-%m', month_start) AS year_month, views, engaged_views,
+             SAFE_DIVIDE(views - LAG(views) OVER (PARTITION BY platform ORDER BY month_start),
+                         LAG(views) OVER (PARTITION BY platform ORDER BY month_start)) AS mom_growth,
              SAFE_DIVIDE(engaged_views - LAG(engaged_views) OVER (PARTITION BY platform ORDER BY month_start),
                          LAG(engaged_views) OVER (PARTITION BY platform ORDER BY month_start)) AS engaged_mom_growth
       FROM m ORDER BY platform, month_start
@@ -118,15 +132,17 @@ questions:
   - id: q6_top_videos
     question: 上個月 Newsroom 在 YouTube 觀看數最高的 5 支影片是哪些？
     expected:
+      layer: 影片層
       scope: newsroom
       metric: views（單則）
-      period: 上一個完整月份（依 YouTube 發布日）
+      period: 上一個完整月份發布的影片
     must_mention:
       - 附上影片標題與連結
+      - 這是上個月發布的影片到今天的累計觀看
     must_not:
-      - 從 agg 表回答（agg 表沒有單則影片）
+      - 從每日流量或月彙總表回答（沒有單則影片）
     reference_sql: |
-      SELECT platform_title, link, publish_date, views
+      SELECT platform_title, link, publish_date, views, engaged_views
       FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
@@ -136,25 +152,29 @@ questions:
   - id: q7_ytd_total
     question: 新聞部今年到目前為止總共有多少觀看？
     expected:
+      layer: 每日流量
       scope: newsroom + talks + connected
-      metric: video_views
+      metric: traffic_views
       period: 今年 1 月 1 日至今
     must_mention:
       - 分平台列出
-      - 若給總和，註明各平台定義不同、只能看量級
+      - 若給總和，註明各平台門檻不同、只能看量級
+      - IG 在 2026-06-01 換算法（之前是快照相減、偏高）
     must_not:
       - 只給一個加總數字而不說明
+      - 用影片層（今年發布影片的累計觀看）回答
     reference_sql: |
-      SELECT platform, SUM(video_views) AS video_views, SUM(post_count) AS post_count
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      SELECT platform, SUM(views) AS views, SUM(story_views) AS story_views, SUM(engaged_views) AS engaged_views
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE month_start >= DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), YEAR)
       GROUP BY platform ORDER BY platform
 
   - id: q8_youtube_definition_change
     question: 新聞部 YouTube 9 月的觀看數比 7 月成長很多，是真的成長嗎？
     expected:
+      layer: 每日流量
       scope: newsroom + talks + connected 的 YouTube
-      metric: video_views（KPI）為主，並列 engaged_views 輔助判斷
+      metric: traffic_views（KPI）為主，並列 engaged views 輔助判斷
       period: 2026-07 與 2026-09
     must_mention:
       - YouTube 於 2026-08-27 把觀看門檻從約 30 秒放寬為約 1 秒
@@ -164,8 +184,57 @@ questions:
       - 不提 8/27 門檻放寬，就回答「是真的成長」
       - 只給 engaged views 而不給 Views
     reference_sql: |
-      SELECT dept_scope, year_month, video_views, engaged_views,
-             ROUND(SAFE_DIVIDE(video_views, engaged_views), 2) AS views_per_engaged
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      SELECT dept_scope, year_month, views, engaged_views,
+             ROUND(SAFE_DIVIDE(views, engaged_views), 2) AS views_per_engaged
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE platform = 'YouTube' AND year_month IN ('2026-07', '2026-09')
       ORDER BY dept_scope, year_month
+
+  - id: q9_why_talks_september
+    question: 為什麼 Talks 9 月表現變好？
+    expected:
+      layer: 兩層都要用：每日流量講總體變化，影片層找原因
+      scope: talks
+      metric: traffic_views（總體）+ video_views（找出貢獻最大的影片）
+      period: 2026-09 對比 2026-08
+    must_mention:
+      - 先用每日流量說明 9 月總體成長多少（各平台分開）
+      - 再用影片層列出貢獻最大的影片（標題、平台、觀看）
+      - 說明兩層口徑不同（影片層是依發布日累計）
+      - YouTube 的成長有一部分來自 2026-08-27 門檻放寬，附 engaged views
+    must_not:
+      - 只給總數不給原因
+      - 只用影片層的月份加總說明總體成長
+    reference_sql: |
+      -- 第一段：每日流量的總體變化
+      SELECT 'traffic' AS layer, platform, year_month, views, engaged_views,
+             CAST(NULL AS STRING) AS title, CAST(NULL AS STRING) AS link
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      WHERE dept_scope = 'talks' AND year_month IN ('2026-08', '2026-09')
+      UNION ALL
+      -- 第二段：9 月發布、累計觀看最高的影片
+      SELECT * FROM (
+        SELECT 'top_video', platform, year_month, views, engaged_views, platform_title, link
+        FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+        WHERE dept_scope = 'talks' AND year_month = '2026-09'
+        ORDER BY views DESC LIMIT 5
+      )
+      ORDER BY layer DESC, platform, year_month, views DESC
+
+  - id: q10_may_overall
+    question: 新聞部 2026 年 5 月的總體成效如何？
+    expected:
+      layer: 每日流量
+      scope: newsroom + talks + connected
+      metric: traffic_views
+      period: 2026-05
+    must_mention:
+      - IG 5 月的每日流量是舊算法（快照相減），通常比 6 月起的官方 API 偏高 10～20%
+      - 各平台分開列出
+    must_not:
+      - 把 5 月 IG 與 6 月以後的 IG 直接比較而不說明換算法
+    reference_sql: |
+      SELECT dept_scope, platform, views, story_views, engaged_views, days_with_data, source_method
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      WHERE year_month = '2026-05'
+      ORDER BY dept_scope, platform
