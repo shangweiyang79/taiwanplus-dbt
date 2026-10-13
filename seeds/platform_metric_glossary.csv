@@ -1,8 +1,9 @@
 platform,canonical_metric,native_column,native_label,definition,cross_platform_comparable,note
-YouTube,video_views,total_views,Views,YouTube 觀看次數,false,
-Instagram,video_views,Total Plays,Plays,Reels 播放次數（取最新一天的累計快照）,false,原表是每日累計快照，直接 SUM 會灌水上百倍
-Facebook,video_views,video_views_3s,3-second video views,播放滿 3 秒的次數,false,門檻最低，數字天生比其他平台大
-X,video_views,total_video_views,Video views,X 影片觀看次數,false,
+YouTube,video_views,total_views,Views,播放約 1 秒即計（2026-08-27 起；之前約 30 秒）,false,KPI。跨 2026-08-27 比較時另附 engaged_views 參考
+YouTube,engaged_views,total_engaged_views,Engaged views,計算方式接近 2026-08-27 之前的舊 Views,false,輔助參考，不是 KPI
+Instagram,video_views,Total Plays,Plays,播放約 0.3～0.5 秒即計,false,原表是每日累計快照，直接 SUM 會灌水上百倍
+Facebook,video_views,video_views_3s,3-second video views,播放滿 3 秒才計（四個平台中最嚴格）,false,數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低
+X,video_views,total_video_views,Video views,連續播放 2 秒才計,false,
 YouTube,watch_time_hours,total_watch_time_hours,Watch time (hours),觀看時長（小時）,false,
 Instagram,watch_time_hours,View total time_hrs,View total time,觀看時長（小時）,false,
 Facebook,watch_time_hours,hours_viewed,,觀看時長（小時）,false,

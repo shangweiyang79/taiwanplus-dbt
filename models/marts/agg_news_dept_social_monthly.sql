@@ -10,6 +10,8 @@ select
   platform,
 
   sum(views)                                              as video_views,
+  -- 只有 YouTube 有；輔助參考（KPI 仍是 video_views），跨 2026-08-27 比較時一併列出
+  sum(engaged_views)                                      as engaged_views,
   count(post_uid)                                         as post_count,
   sum(watch_time_hours)                                   as watch_time_hours,
   sum(engagements)                                        as engagements,

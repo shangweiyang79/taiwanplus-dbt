@@ -6,7 +6,8 @@
 -- post_map / vod_category 只涵蓋 Newsroom，所以 Talks / Connected 的 vod_id、分類欄位一律為 NULL。
 --
 -- 必讀：
---   1. 各平台「觀看」定義不同（FB 播放滿 3 秒門檻最低），跨平台加總只能看量級，不能比較平台優劣。
+--   1. 各平台「觀看」門檻與受眾都不同，跨平台加總只能看量級，不能比較平台優劣。
+--      YouTube 的 Views 於 2026-08-27 放寬（30 秒 → 1 秒），跨 8/27 比較時另附 engaged_views 參考（KPI 仍是 views）。
 --   2. 數字都是累計值，愈晚發布累計愈少，最新月份天生偏低。
 --   3. impressions / ctr 只有 YouTube 有；watch_time_hours X 沒有。
 select
@@ -25,6 +26,7 @@ select
   m.thumbnail_url,
 
   m.views,
+  m.engaged_views,
   m.watch_time_hours,
   m.engagements,
   m.impressions,

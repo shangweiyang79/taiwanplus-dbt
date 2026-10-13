@@ -1,10 +1,12 @@
 -- 一列 = 一支 FB 影片（只有 Newsroom 有 FB），數字為累計值，不需要取快照。
--- views 用 video_views_3s（播放滿 3 秒），門檻比其他平台低，跨平台加總只能看量級。
+-- views 用 video_views_3s（播放滿 3 秒），是四個平台中門檻最嚴格的。
+-- FB 數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低。跨平台加總只能看量級。
 select
   video_id                                        as join_key,
   'Facebook'                                      as platform,
   'newsroom'                                      as dept_scope,
   video_views_3s                                  as views,
+  cast(null as int64)                             as engaged_views,
   hours_viewed                                    as watch_time_hours,
   engagements,
   cast(null as int64)                             as impressions,

@@ -20,6 +20,7 @@ with
     'Instagram'                                     as platform,
     '{{ a.dept_scope }}'                            as dept_scope,
     `Total Plays`                                   as views,
+    cast(null as int64)                             as engaged_views,
     `View total time_hrs`                           as watch_time_hours,
     `Reels interactions` + `Shares`                 as engagements,
     cast(null as int64)                             as impressions,

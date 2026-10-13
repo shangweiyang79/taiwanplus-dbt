@@ -4,6 +4,7 @@ select
   'X'                                             as platform,
   'newsroom'                                      as dept_scope,
   total_video_views                               as views,
+  cast(null as int64)                             as engaged_views,
   -- X 不提供觀看時長
   cast(null as float64)                           as watch_time_hours,
   -- 不用 total_actions（= likes + shares，不含留言，會低估約 5%），

@@ -1,6 +1,6 @@
 # TaiwanPlus 新聞部社群成效：AI 查詢說明
 
-> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-12），**不要手改**。
+> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-13），**不要手改**。
 > 定義的來源是 dbt 專案：`models/docs/_definitions.md`、`models/marts/_marts.yml`、`seeds/`。
 > 資料庫是 BigQuery（專案 `ivory-airfoil-418408`，位置 asia-east1），SQL 一律用 GoogleSQL。
 
@@ -21,20 +21,27 @@
 
 **影片觀看數，是「社群成效」的預設主指標。**
 
-各平台的原生指標名稱與定義不同，這裡統一叫 `video_views`：
+各平台的原生指標名稱與計算門檻不同，這裡統一叫 `video_views`：
 
-| 平台 | 原生欄位 | 平台上的名稱 | 定義 |
+| 平台 | 原生欄位 | 平台上的名稱 | 計算門檻 |
 |---|---|---|---|
-| YouTube | total_views | Views | YouTube 觀看次數 |
-| Instagram | Total Plays | Plays | Reels 播放次數（取最新一天的累計快照） |
-| Facebook | video_views_3s | 3-second video views | 播放滿 3 秒的次數，門檻最低 |
-| X | total_video_views | Video views | X 影片觀看次數 |
+| YouTube | total_views | Views | **2026-08-27 起播放約 1 秒即計一次；之前約 30 秒**（舊標準約等於現在的 Engaged views） |
+| Instagram | Total Plays | Plays | 播放約 0.3～0.5 秒即計（取最新一天的累計快照） |
+| Facebook | video_views_3s | 3-second video views | 播放滿 3 秒，**目前四個平台中門檻最嚴格** |
+| X | total_video_views | Video views | 連續播放 2 秒 |
+
+YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之前的舊 Views，作為**輔助參考**。**KPI 仍是 Views**。
 
 解讀規則：
-1. **不能跨平台比較優劣**。FB 用 3 秒門檻，數字天生最大（2026 年 FB 的數字遠大於 YouTube），差距主要來自定義而不是成效。跨平台加總只能看整體量級與趨勢。
+1. **不能跨平台比較優劣**。各平台的計算門檻不同、受眾結構也不同，絕對值不能直接比較。跨平台加總只能看整體量級。
+   - **FB 的數字最大，不是因為門檻低**（FB 的 3 秒其實比 IG、X、現在的 YouTube 都嚴格），而是因為 FB 的觀眾群以**菲律賓**最多，和菲律賓有關的新聞在 FB 表現最好。
+   - 實測：2026 年 Newsroom 在 FB 上，標題提到菲律賓的貼文平均觀看是其他貼文的 7.8 倍；這些貼文只占貼文數 1.7%，卻貢獻 FB 總觀看的 12%。
 2. **要比較時，看同一平台自己的逐月趨勢**。
-3. **數字都是累計值**，愈晚發布的影片累計天數愈少，最新月份天生偏低，不代表成效衰退。
-4. 對照表也存在 seed `platform_metric_glossary`。
+3. **YouTube 的 Views 於 2026-08-27 放寬門檻**。KPI 仍以 Views 為準，但期間跨過 8/27 時要說明影響：
+   - 實測 8/27 之前 Views 約為 Engaged views 的 1.1～1.3 倍，8/27 起變成 2.1～2.7 倍，所以 8/27 之後 Views 的成長有相當部分來自定義放寬。
+   - 同時列出 Engaged views 作為輔助參考，幫助判斷實際的觀看變化。
+4. **數字都是累計值**，愈晚發布的影片累計天數愈少，最新月份天生偏低，不代表成效衰退。
+5. 對照表也存在 seed `platform_metric_glossary`。
 
 ## 2. 回答流程
 
@@ -53,6 +60,7 @@
 - 「成效」「表現」「performance」沒指定指標時 → `video_views`（影片觀看數），並附上 `post_count`（貼文數）當背景。
 - 「互動」→ `engagements`；「互動率」→ `engagement_rate`；「觀看時長」→ `watch_time_hours`（X 沒有）。
 - 各平台的觀看指標原生名稱不同（YouTube Views、IG Plays、FB 3-second video views、X Video views），回答時要用統一名稱「影片觀看數」，必要時括號註明原生名稱。
+- **YouTube 一律以 Views 為主（KPI）**，同時附上 `engaged_views`（`yt_engaged_views`）作為輔助參考。期間跨過 2026-08-27 時（例如比較 7 月與 9 月），要說明 Views 的變化有一部分來自門檻放寬。
 
 ### 判斷期間
 
@@ -73,10 +81,16 @@
 ### 呈現規則
 
 1. **各平台分開列**。不要把四個平台的觀看數加總成單一數字當主結論；若列出總和，要註明「各平台定義不同，只能看量級」。
-2. **不要用絕對值比較平台優劣**（FB 3 秒門檻最低，數字天生最大）。比較請看各平台自己的逐月趨勢（例如月增率）。
-3. 最新月份累計天數少、天生偏低，不要解讀成衰退。
-4. 主動說明資料限制：Connected 的 IG 於 2026-07-04 停更；Talks / Connected 沒有主題分類；X 沒有觀看時長；YouTube 資料從 2026-01-01 起。
-5. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
+2. **不要用絕對值比較平台優劣**。比較請看各平台自己的逐月趨勢（例如月增率）。
+   - 解釋 FB 數字為什麼最大時，原因是**菲律賓受眾**，不是「門檻低」（FB 的 3 秒門檻是四個平台中最嚴格的）。
+3. **YouTube 以 Views 為主、Engaged views 為輔**。期間跨過 2026-08-27 時，Views 的成長不能全部歸因於成效，要搭配 Engaged views 說明有多少來自定義放寬。
+4. 最新月份累計天數少、天生偏低，不要解讀成衰退。
+5. 主動說明資料限制：
+   - Connected 的 IG 於 2026-07-04 停更
+   - Talks / Connected 沒有主題分類
+   - X 沒有觀看時長
+   - YouTube 資料從 2026-01-01 起，Views 定義於 2026-08-27 變更
+6. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
 
 ## 3. 資料表
 
@@ -90,7 +104,8 @@
 | `year_month` | 月份字串（YYYY-MM）。 |
 | `dept_scope` | 新聞部內的單位：`newsroom`（新聞台）、`talks`、`connected`。三者合起來就是「新聞部」。 |
 | `platform` | 社群平台：`YouTube`、`Instagram`、`Facebook`、`X`。 |
-| `video_views` | 影片觀看數，各平台定義不同（見表格說明），不可跨平台比較優劣。 |
+| `video_views` | 影片觀看數，各平台計算門檻不同（見表格說明），不可跨平台比較優劣。YouTube 於 2026-08-27 放寬門檻。 |
+| `engaged_views` | YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 video_views；跨 2026-08-27 比較時一併列出。 |
 | `post_count` | 影片貼文數。 |
 | `watch_time_hours` | 觀看時長（小時）。X 沒有，為 NULL。 |
 | `engagements` | 互動數，各平台定義見 fct_social_post_performance.engagements。 |
@@ -119,6 +134,7 @@
 | `caption` | 貼文文案。IG 只有 Newsroom 在 2025-06-02 之後有值；YouTube 為 NULL。 |
 | `thumbnail_url` | 縮圖網址。IG、FB 是會過期的 Meta CDN 簽章網址。 |
 | `views` | 影片觀看數，各平台定義不同（見 §1）。 |
+| `engaged_views` | YouTube 的 Engaged views（輔助參考），其他平台為 NULL。計算方式接近 2026-08-27 之前的舊 Views。 KPI 仍是 views；跨 8/27 比較時一併列出這欄，說明 views 的變化有多少來自定義放寬。 |
 | `watch_time_hours` | 觀看時長（小時）。X 不提供，為 NULL。 |
 | `engagements` | 互動數。YouTube = 讚 + 留言 + 分享；IG = Reels interactions + Shares；FB = 原生 engagements；X = 讚 + 回覆 + 轉推。 |
 | `impressions` | 曝光次數，只有 YouTube 有。 |
@@ -167,14 +183,15 @@
 | `avg_views_per_post` | 平均每則觀看數 | `SAFE_DIVIDE(SUM(views), COUNT(post_uid))` | 影片觀看數 / 影片貼文數。少數爆量貼文會把平均拉高，建議同時看中位數或最大值。 |
 | `engagement_rate` | 互動率 | `SAFE_DIVIDE(SUM(engagements), SUM(views))` | 互動數 / 影片觀看數。各平台觀看與互動定義都不同，只能在同一平台內比較。 |
 | `engagements` | 互動數 | `SUM(engagements)` | 互動數加總，各平台定義見 engagements 欄位說明。 |
-| `fb_video_views` | Facebook 3 秒觀看數 | `SUM(IF(platform = 'Facebook', views, NULL))` | Facebook 的 3-second video views（video_views_3s），門檻最低。 |
+| `fb_video_views` | Facebook 3 秒觀看數 | `SUM(IF(platform = 'Facebook', views, NULL))` | Facebook 的 3-second video views（video_views_3s），播放滿 3 秒才計，是四個平台中門檻最嚴格的。 FB 數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低。 |
 | `ig_video_views` | Instagram 播放數 | `SUM(IF(platform = 'Instagram', views, NULL))` | Instagram 的 Plays（Total Plays，取最新快照）。 |
 | `impressions` | 曝光數（僅 YouTube） | `SUM(impressions)` | 縮圖曝光次數，只有 YouTube 有，不是跨平台指標。 |
 | `post_count` | 影片貼文數 | `COUNT(post_uid)` | 影片貼文數。 |
 | `video_views` | 影片觀看數 | `SUM(views)` | 解讀規則見 §1 |
 | `watch_time_hours` | 觀看時長（小時） | `SUM(watch_time_hours)` | 觀看時長加總。X 不提供，所以跨平台加總只含 YouTube + IG + FB。 |
 | `x_video_views` | X 影片觀看數 | `SUM(IF(platform = 'X', views, NULL))` | X 的 Video views（total_video_views）。 |
-| `yt_video_views` | YouTube 觀看數 | `SUM(IF(platform = 'YouTube', views, NULL))` | YouTube 的 Views（total_views）。 |
+| `yt_engaged_views` | YouTube Engaged views | `SUM(IF(platform = 'YouTube', engaged_views, NULL))` | YouTube 的 Engaged views，計算方式接近 2026-08-27 之前的舊 Views。 輔助參考用，KPI 仍是 yt_video_views；期間跨過 8/27 時一併列出，說明 Views 的變化有多少來自定義放寬。 |
+| `yt_video_views` | YouTube 觀看數 | `SUM(IF(platform = 'YouTube', views, NULL))` | YouTube 的 Views（total_views），是 KPI。2026-08-27 起門檻由約 30 秒放寬為約 1 秒， 跨 8/27 比較時另附 yt_engaged_views 參考。 |
 
 ## 5. 預設查詢
 
@@ -229,10 +246,11 @@ ORDER BY 1, 2
 
 | platform | canonical_metric | native_column | native_label | definition | cross_platform_comparable | note |
 |---|---|---|---|---|---|---|
-| YouTube | video_views | total_views | Views | YouTube 觀看次數 | false |  |
-| Instagram | video_views | Total Plays | Plays | Reels 播放次數（取最新一天的累計快照） | false | 原表是每日累計快照，直接 SUM 會灌水上百倍 |
-| Facebook | video_views | video_views_3s | 3-second video views | 播放滿 3 秒的次數 | false | 門檻最低，數字天生比其他平台大 |
-| X | video_views | total_video_views | Video views | X 影片觀看次數 | false |  |
+| YouTube | video_views | total_views | Views | 播放約 1 秒即計（2026-08-27 起；之前約 30 秒） | false | KPI。跨 2026-08-27 比較時另附 engaged_views 參考 |
+| YouTube | engaged_views | total_engaged_views | Engaged views | 計算方式接近 2026-08-27 之前的舊 Views | false | 輔助參考，不是 KPI |
+| Instagram | video_views | Total Plays | Plays | 播放約 0.3～0.5 秒即計 | false | 原表是每日累計快照，直接 SUM 會灌水上百倍 |
+| Facebook | video_views | video_views_3s | 3-second video views | 播放滿 3 秒才計（四個平台中最嚴格） | false | 數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低 |
+| X | video_views | total_video_views | Video views | 連續播放 2 秒才計 | false |  |
 | YouTube | watch_time_hours | total_watch_time_hours | Watch time (hours) | 觀看時長（小時） | false |  |
 | Instagram | watch_time_hours | View total time_hrs | View total time | 觀看時長（小時） | false |  |
 | Facebook | watch_time_hours | hours_viewed |  | 觀看時長（小時） | false |  |

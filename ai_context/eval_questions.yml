@@ -16,10 +16,14 @@ questions:
     must_mention:
       - 包含 Newsroom、Talks、Connected 三個單位
       - 各平台分開列出
-      - 各平台觀看定義不同（例如 FB 是 3 秒觀看）
+      - 各平台觀看門檻不同
       - Connected 的 IG 已停更
+      - YouTube 以 Views 為主，附 engaged views 參考，並說明 2026-08-27 門檻放寬的影響
     must_not:
       - 只回答 Newsroom
+      - 說 FB 數字大是因為門檻低
+      - 不提 8/27 門檻放寬，就把 YouTube Views 的成長當成表現變好
+      - 用 engaged views 取代 Views 當主要數字
       - 用四平台加總的單一數字當主結論
       - 用絕對值說某平台表現最好
     reference_sql: |
@@ -86,21 +90,29 @@ questions:
       metric: video_views 的各平台自身趨勢（例如月增率），不是絕對值
       period: 最近三個完整月份
     must_mention:
-      - 各平台觀看定義不同，無法直接用絕對值比較
+      - 各平台觀看門檻與受眾不同，無法直接用絕對值比較
       - 改用各平台自己的成長趨勢回答
+      - YouTube 以 Views 為主，附 engaged views 參考，並說明 2026-08-27 門檻放寬的影響
     must_not:
       - 直接說 Facebook 觀看數最高所以表現最好
+      - 說 FB 數字大是因為門檻低
+      - 不提 8/27 門檻放寬，就用 YouTube Views 的月增率下結論
     reference_sql: |
+      -- mom_growth 用 KPI（video_views）；YouTube 另附 engaged_mom_growth 參考（跨 8/27）
       WITH m AS (
-        SELECT month_start, platform, SUM(video_views) AS video_views
+        SELECT month_start, platform,
+               SUM(video_views) AS video_views,
+               SUM(engaged_views) AS engaged_views
         FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
         WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
           AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
         GROUP BY 1, 2
       )
-      SELECT platform, FORMAT_DATE('%Y-%m', month_start) AS year_month, video_views,
+      SELECT platform, FORMAT_DATE('%Y-%m', month_start) AS year_month, video_views, engaged_views,
              SAFE_DIVIDE(video_views - LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start),
-                         LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start)) AS mom_growth
+                         LAG(video_views) OVER (PARTITION BY platform ORDER BY month_start)) AS mom_growth,
+             SAFE_DIVIDE(engaged_views - LAG(engaged_views) OVER (PARTITION BY platform ORDER BY month_start),
+                         LAG(engaged_views) OVER (PARTITION BY platform ORDER BY month_start)) AS engaged_mom_growth
       FROM m ORDER BY platform, month_start
 
   - id: q6_top_videos
@@ -137,3 +149,23 @@ questions:
       FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
       WHERE month_start >= DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), YEAR)
       GROUP BY platform ORDER BY platform
+
+  - id: q8_youtube_definition_change
+    question: 新聞部 YouTube 9 月的觀看數比 7 月成長很多，是真的成長嗎？
+    expected:
+      scope: newsroom + talks + connected 的 YouTube
+      metric: video_views（KPI）為主，並列 engaged_views 輔助判斷
+      period: 2026-07 與 2026-09
+    must_mention:
+      - YouTube 於 2026-08-27 把觀看門檻從約 30 秒放寬為約 1 秒
+      - 以 Views 回答，並附 engaged views 說明有多少成長來自定義放寬
+      - 分單位說明（Newsroom、Talks、Connected）
+    must_not:
+      - 不提 8/27 門檻放寬，就回答「是真的成長」
+      - 只給 engaged views 而不給 Views
+    reference_sql: |
+      SELECT dept_scope, year_month, video_views, engaged_views,
+             ROUND(SAFE_DIVIDE(video_views, engaged_views), 2) AS views_per_engaged
+      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      WHERE platform = 'YouTube' AND year_month IN ('2026-07', '2026-09')
+      ORDER BY dept_scope, year_month

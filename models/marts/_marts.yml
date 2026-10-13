@@ -81,7 +81,16 @@ models:
         description: 縮圖網址。IG、FB 是會過期的 Meta CDN 簽章網址。
 
       - name: views
-        description: "{{ doc('video_views_definition') }}"
+        # 完整定義放在表格描述（BigQuery 欄位描述上限 1,024 字元，放不下）
+        description: >
+          影片觀看數（各平台原生指標：YouTube Views、IG Plays、FB 3-second video views、X Video views）。
+          各平台計算門檻與受眾不同，不可跨平台比較優劣；YouTube 於 2026-08-27 放寬門檻，跨期比較時另附 engaged_views 參考。
+          完整定義見表格說明。
+
+      - name: engaged_views
+        description: >
+          YouTube 的 Engaged views（輔助參考），其他平台為 NULL。計算方式接近 2026-08-27 之前的舊 Views。
+          KPI 仍是 views；跨 8/27 比較時一併列出這欄，說明 views 的變化有多少來自定義放寬。
 
       - name: watch_time_hours
         description: 觀看時長（小時）。X 不提供，為 NULL。
@@ -138,7 +147,9 @@ models:
 
       - name: yt_video_views
         label: YouTube 觀看數
-        description: YouTube 的 Views（total_views）。
+        description: >
+          YouTube 的 Views（total_views），是 KPI。2026-08-27 起門檻由約 30 秒放寬為約 1 秒，
+          跨 8/27 比較時另附 yt_engaged_views 參考。
         type: simple
         agg: sum
         expr: views
@@ -154,7 +165,9 @@ models:
 
       - name: fb_video_views
         label: Facebook 3 秒觀看數
-        description: Facebook 的 3-second video views（video_views_3s），門檻最低。
+        description: >
+          Facebook 的 3-second video views（video_views_3s），播放滿 3 秒才計，是四個平台中門檻最嚴格的。
+          FB 數字大是因為受眾以菲律賓為主、菲律賓相關新聞表現特別好，不是門檻低。
         type: simple
         agg: sum
         expr: views
@@ -167,6 +180,16 @@ models:
         agg: sum
         expr: views
         filter: "{{ Dimension('post__platform') }} = 'X'"
+
+      - name: yt_engaged_views
+        label: YouTube Engaged views
+        description: >
+          YouTube 的 Engaged views，計算方式接近 2026-08-27 之前的舊 Views。
+          輔助參考用，KPI 仍是 yt_video_views；期間跨過 8/27 時一併列出，說明 Views 的變化有多少來自定義放寬。
+        type: simple
+        agg: sum
+        expr: engaged_views
+        filter: "{{ Dimension('post__platform') }} = 'YouTube'"
 
       - name: watch_time_hours
         label: 觀看時長（小時）
@@ -227,7 +250,9 @@ models:
       - name: platform
         description: "{{ doc('platform') }}"
       - name: video_views
-        description: 影片觀看數，各平台定義不同（見表格說明），不可跨平台比較優劣。
+        description: 影片觀看數，各平台計算門檻不同（見表格說明），不可跨平台比較優劣。YouTube 於 2026-08-27 放寬門檻。
+      - name: engaged_views
+        description: YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 video_views；跨 2026-08-27 比較時一併列出。
       - name: post_count
         description: 影片貼文數。
       - name: watch_time_hours

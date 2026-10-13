@@ -9,6 +9,8 @@ select
   'YouTube'                                           as platform,
   y.dept_scope,
   y.total_views                                       as views,
+  -- Engaged views：計算方式接近 2026-08-27 之前的舊 Views，輔助參考用（KPI 仍是 views）
+  y.total_engaged_views                               as engaged_views,
   y.total_watch_time_hours                            as watch_time_hours,
   y.total_likes + y.total_comments + y.total_shares   as engagements,
   y.total_impressions                                 as impressions,
