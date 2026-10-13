@@ -326,18 +326,18 @@ models:
                 values: ['video', 'story']
       - name: views
         description: >
-          當天實際發生的觀看數，是總體成效的 KPI。YouTube / FB 含付費觀看；IG 2026-06-01 之前為快照相減（偏高 10～20%，偶有負數）。
+          當天實際發生的觀看數，是總體成效的 KPI。YouTube / FB 含付費觀看；IG 2026-06-01 之前為逐支 reel 快照相減（通常比 API 偏高 10～20%）。
           各平台門檻不同，不可跨平台比較優劣。
       - name: paid_views
         description: 付費觀看（YouTube、FB、IG 有欄位；X 為 NULL）。
       - name: engaged_views
         description: YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 views。
       - name: watch_time_hours
-        description: 當天的觀看時數。IG 為快照相減；FB 由分鐘換算；Stories 為 NULL。
+        description: 當天的觀看時數。IG 為逐支 reel 快照相減（已排除 API 漏抓造成的負數）；FB 由分鐘換算；Stories 為 NULL。
       - name: source_method
         description: >
           資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/
-          snapshot_delta（IG 2026-06-01 前）/ story_by_publish_date（IG Stories）。
+          reel_snapshot_delta（IG 2026-06-01 前，逐支 reel 快照相減）/ story_by_publish_date（IG Stories）。
         dimension:
           type: categorical
 
@@ -409,7 +409,7 @@ models:
       - name: days_with_data
         description: 當月有資料的天數。少於當月天數代表資料不完整（例如本月、或資料起始月）。
       - name: source_method
-        description: 資料算法。IG 出現 snapshot_delta 代表 2026-06 之前的舊算法，通常比 API 偏高 10～20%。
+        description: 資料算法。IG 出現 reel_snapshot_delta 代表 2026-06 之前的快照算法，通常比 API 偏高 10～20%。
       - name: is_current_month
         description: 是否為本月（台北時間），本月資料不完整。
 

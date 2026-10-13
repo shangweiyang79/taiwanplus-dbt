@@ -22,10 +22,8 @@ with expected as (
   union all
   select date_trunc(d, month), dept_scope, 'Instagram', sum(v)
   from (
-    select Date as d, 'newsroom' as dept_scope, `IG News VV` as v from {{ source('instagram', 'daily_ig_summary_report') }} where Date < '2026-06-01'
-    union all select Date, 'talks', `IG Talks VV` from {{ source('instagram', 'daily_ig_summary_report') }} where Date < '2026-06-01'
-    union all select Date, 'connected', `IG Connected VV` from {{ source('instagram', 'daily_ig_summary_report') }} where Date < '2026-06-01'
-    union all select Date, 'newsroom', `IG News VV` from {{ source('instagram', 'daily_ig_summary_report_new') }} where Date >= '2026-06-01'
+    -- IG 只比 2026-06-01 起的 API 觀看數；之前的觀看數由 dbt 逐支 reel 相減計算（見 stg_daily__instagram_reel_deltas）
+    select Date as d, 'newsroom' as dept_scope, `IG News VV` as v from {{ source('instagram', 'daily_ig_summary_report_new') }} where Date >= '2026-06-01'
     union all select Date, 'talks', `IG Talks VV` from {{ source('instagram', 'daily_ig_summary_report_new') }} where Date >= '2026-06-01'
     union all select Date, 'connected', `IG Connected VV` from {{ source('instagram', 'daily_ig_summary_report_new') }} where Date >= '2026-06-01'
     union all select date, 'newsroom', `IG News Story VV` from {{ source('instagram', 'ig_stories_pivot_daily') }}
@@ -37,6 +35,8 @@ with expected as (
 actual as (
   select month_start, dept_scope, platform, sum(views) as views
   from {{ ref('fct_daily_traffic') }}
+  -- 與 expected 同範圍：IG 只比 2026-06 起
+  where not (platform = 'Instagram' and content_type = 'video' and date < '2026-06-01')
   group by 1, 2, 3
 )
 select month_start, dept_scope, platform, e.views as expected_views, a.views as actual_views

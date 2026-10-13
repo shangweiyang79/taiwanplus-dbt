@@ -17,7 +17,7 @@ select
   sum(watch_time_hours)                                             as watch_time_hours,
 
   count(distinct date)                                              as days_with_data,
-  -- IG 2026-06 之前是 snapshot_delta（快照相減，通常偏高 10～20%），之後是 api
+  -- IG 2026-06 之前是 reel_snapshot_delta（逐支 reel 快照相減，通常偏高 10～20%），之後是 api
   string_agg(distinct source_method order by source_method)         as source_method,
   month_start = date_trunc(current_date('Asia/Taipei'), month)      as is_current_month
 from {{ ref('fct_daily_traffic') }}

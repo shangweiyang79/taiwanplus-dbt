@@ -32,7 +32,8 @@
 
 每日流量的資料限制：
 - 起始日：YouTube 2025-06-28、FB 2025-08-01、IG 2025-08-01、IG Stories 2025-09-14、X 2025-12-29。更早的期間沒有每日流量。
-- **IG 於 2026-06-01 換算法**：之前是各帳號每天 Total Plays 總和減前一天（`source_method = snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%，偶有負數；跨 6/1 比較 IG 趨勢時要說明。
+- **IG 於 2026-06-01 換算法**：之前是每支 reel 的 Total Plays 累計快照逐支相減（`source_method = reel_snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%；跨 6/1 比較 IG 趨勢時要說明。
+- IG 觀看時數所有期間都是逐支 reel 快照相減，已排除 API 漏抓 / 回傳 0 造成的負數（例如 2026-07 原報表出現大幅負數的觀看時數）。
 - IG 的 views 含影片類 Stories（`story_views` 另列）；YouTube / FB 含付費觀看（`paid_views` 另列）。
 - Connected 的 IG 停更後，舊貼文每天仍有觀看，所以每日流量不會是 0（影片層的新發布則是 0）。
 - TaiwanPlus Livestream 頻道的每日流量到 2026-08-05 為止。
@@ -139,7 +140,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `paid_views` | 付費觀看，已包含在 views 裡。 |
 | `watch_time_hours` | 當月觀看時數。 |
 | `days_with_data` | 當月有資料的天數。少於當月天數代表資料不完整（例如本月、或資料起始月）。 |
-| `source_method` | 資料算法。IG 出現 snapshot_delta 代表 2026-06 之前的舊算法，通常比 API 偏高 10～20%。 |
+| `source_method` | 資料算法。IG 出現 reel_snapshot_delta 代表 2026-06 之前的快照算法，通常比 API 偏高 10～20%。 |
 | `is_current_month` | 是否為本月（台北時間），本月資料不完整。 |
 
 ### `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
@@ -158,8 +159,8 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `views` | 影片觀看數，各平台定義不同（見 §1）。 |
 | `paid_views` | 付費觀看（YouTube、FB、IG 有欄位；X 為 NULL）。 |
 | `engaged_views` | YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 views。 |
-| `watch_time_hours` | 當天的觀看時數。IG 為快照相減；FB 由分鐘換算；Stories 為 NULL。 |
-| `source_method` | 資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/ snapshot_delta（IG 2026-06-01 前）/ story_by_publish_date（IG Stories）。 |
+| `watch_time_hours` | 當天的觀看時數。IG 為逐支 reel 快照相減（已排除 API 漏抓造成的負數）；FB 由分鐘換算；Stories 為 NULL。 |
+| `source_method` | 資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/ reel_snapshot_delta（IG 2026-06-01 前，逐支 reel 快照相減）/ story_by_publish_date（IG Stories）。 |
 
 ### `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
 

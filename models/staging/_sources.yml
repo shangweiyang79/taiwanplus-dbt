@@ -70,13 +70,14 @@ sources:
         description: Talks 的 IG 帳號。沒有 caption / thumbnail_url 欄位。
       - name: daily_ig_summary_report
         description: >
-          IG 每日流量（舊算法，2026-06-01 之前使用）：各帳號每天的 Total Plays 總和減去前一天。
-          和官方 API 重疊期間通常偏高 10～20%，偶有負數（快照異常）。News / Talks / Connected / Social(Program) 為欄。
+          IG 每日流量（舊報表）：各帳號每天的 Total Plays 總和減去前一天。dbt 已不使用這張表
+          （API 漏抓時會產生大幅負數），改由 stg_daily__instagram_reel_deltas 逐支 reel 相減，正常月份結果與本表相同。
         config:
           freshness: null
       - name: daily_ig_summary_report_new
         description: >
-          IG 每日流量（2026-06-01 起）：觀看來自官方 API（account_daily_insights），時數仍是快照相減。
+          IG 每日流量（2026-06-01 起）：觀看來自官方 API（account_daily_insights）。
+          時數欄位是帳號總和相減、API 漏抓時會變負數，dbt 不使用，改用逐支 reel 相減。
           News / Talks / Connected / Social(Program) 為欄；Program 不屬於新聞部。
         config:
           loaded_at_field: "CAST(Date AS TIMESTAMP)"
