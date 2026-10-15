@@ -1,0 +1,4 @@
+streamlit==1.57.0
+google-cloud-geminidataanalytics==0.13.5
+google-auth>=2.40
+pandas==2.3.3

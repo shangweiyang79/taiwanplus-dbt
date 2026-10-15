@@ -1,0 +1,90 @@
+# 新聞部社群成效 Data Chatbox（Cloud Run + IAP）
+
+這是一個網頁 chatbox，讓同事用中文或英文問新聞部（Newsroom + Talks + Connected）的社群成效。
+
+- **後端**：Conversational Analytics API 的 Data Agent `news-dept-social`。agent 的設定與評估在 `../ai_context/ca_agent/`。
+- **執行身分**：唯讀 SA `data-chatbox-ro`，只能讀 `news_dept_social`，任何寫入都會被拒（驗證方式見 `../ai_context/ca_agent/verify_readonly.py`）。
+- **登入**：IAP 限定授權的 Google 帳號，其他人打不開頁面。
+
+| 資源 | 名稱 |
+|---|---|
+| 專案 / 區域 | `ivory-airfoil-418408` / `asia-east1` |
+| Cloud Run 服務 | `data-chatbox` |
+| 映像 | `asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN` |
+| 執行身分 | `data-chatbox-ro@ivory-airfoil-418408.iam.gserviceaccount.com` |
+
+## 回答模式
+
+PoC 評估結果見 `../ai_context/ca_agent/eval_results/`。
+
+| 模式 | 延遲 | 什麼時候用 |
+|---|---|---|
+| ⚡ 快速（FAST） | 約 5–20 秒 | 單純查數：多少、列出、前幾名 |
+| 🧠 深入分析（THINKING） | 約 20–50 秒 | 需要判斷：為什麼、是真的嗎、哪個最好、成效如何、比較、趨勢 |
+
+- **「自動」**由 `notes.route_mode` 依關鍵字判斷用哪個模式；側欄可以手動指定。
+- **快速模式**取數正確，但回答常漏掉業務提醒。所以 `notes.build_notes` 會依查詢結果，用固定規則補上提醒：YouTube 8/27 門檻、IG 6/1 換算法、Connected IG 停更、跨平台不可比、本月未完整，以及「查詢範圍」。回答裡已經講過的提醒不會重複附上。
+- **語言**：中文問題會在訊息後面附上「請用繁體中文回答」。實測快速模式不加這句，中文問題常會用英文回答。
+
+## 本機執行
+
+```bash
+cd taiwanplus_dbt/chatbox_app
+pip install -r requirements.txt
+python test_notes.py
+streamlit run app.py      # 本機會模擬 data-chatbox-ro，你需要在 SA 上有 serviceAccountTokenCreator
+```
+
+## 部署 / 更新
+
+gcloud 預設專案不是 ivory 時，每個指令都要加 `--project=ivory-airfoil-418408 --billing-project=ivory-airfoil-418408`。
+
+```bash
+# 0.（只有第一次）啟用 API、建 Artifact Registry、建立 IAP service agent
+gcloud services enable iap.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
+gcloud artifacts repositories create data-chatbox --repository-format=docker --location=asia-east1
+gcloud beta services identity create --service=iap.googleapis.com
+
+# 1. 建映像（先查目前的 tag，用下一號，不要覆寫舊號碼）
+gcloud run services describe data-chatbox --region=asia-east1 --format="value(spec.template.spec.containers[0].image)"
+gcloud builds submit --tag asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN
+
+# 2. 部署（IAP 直接掛在 Cloud Run 上，不需要 Load Balancer）
+gcloud run deploy data-chatbox --region=asia-east1 \
+    --image=asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN \
+    --service-account=data-chatbox-ro@ivory-airfoil-418408.iam.gserviceaccount.com \
+    --no-allow-unauthenticated --iap \
+    --session-affinity --timeout=3600 \
+    --cpu=1 --memory=1Gi --min-instances=0 --max-instances=2 --concurrency=20
+
+# 3.（只有第一次）讓 IAP 能呼叫服務
+gcloud run services add-iam-policy-binding data-chatbox --region=asia-east1 \
+    --member=serviceAccount:service-844960873125@gcp-sa-iap.iam.gserviceaccount.com \
+    --role=roles/run.invoker
+```
+
+- `--session-affinity`：Streamlit 用 WebSocket 維持對話狀態，同一位使用者要固定連到同一個執行個體。
+- `--min-instances=0`：沒人用時不收費。第一次開頁面要多等幾秒冷啟動。
+
+## 開放給誰用
+
+```bash
+# 加人（或改成 group:xxx@pts.org.tw 開給整個群組）
+gcloud iap web add-iam-policy-binding --resource-type=cloud-run --service=data-chatbox --region=asia-east1 \
+    --member=user:someone@pts.org.tw --role=roles/iap.httpsResourceAccessor
+
+# 看目前有誰
+gcloud iap web get-iam-policy --resource-type=cloud-run --service=data-chatbox --region=asia-east1
+```
+
+2026-10-15 首次上線時只開給 `joy.yang@pts.org.tw`。
+
+## 維運
+
+- **使用紀錄**：每題一行 JSON 寫到 Cloud Logging，欄位有 user、question、thinking、seconds、error。可以在 Logs Explorer 用 `jsonPayload.component="data-chatbox"` 篩選。
+- **改了新聞部定義之後**：照根目錄 walkthrough §4 重產 AI 定義檔，再重新部署 agent（`ai_context/ca_agent/deploy_agent.py`）。網頁本身不用重新部署。
+- **改了 `notes.py` 的提醒內容**：要跟 `ai_context/news_dept_social_context.md` 的定義保持一致，改完跑 `python test_notes.py`。
+- **費用**：
+  - Cloud Run：閒置時 0。
+  - BigQuery：每題約 0.1–1.6 GB，因為 `news_dept_social` 的表是 view。
+  - CA API：本身是否收費待到 Billing 確認。
