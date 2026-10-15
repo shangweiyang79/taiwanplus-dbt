@@ -10,6 +10,7 @@
     streamlit run app.py
 部署：見 README.md
 """
+import base64
 import json
 import pathlib
 import time
@@ -22,8 +23,18 @@ from config import credentials
 from narrator import narrate, unmatched_numbers
 from notes import build_notes, route_mode, scope_line, unsaid
 
-LOGO = str(pathlib.Path(__file__).parent / "assets" / "taiwanplus_news.png")
-st.set_page_config(page_title="新聞部社群成效 Chatbox｜TaiwanPlus News", page_icon=LOGO, layout="wide")
+ASSETS = pathlib.Path(__file__).parent / "assets"
+
+
+def data_uri(name):
+    # 用 data URI 而不是檔案路徑：Streamlit 1.57 的 /media 路徑經過 IAP 時會回 500
+    # （Expected ASGI message 'http.response.start'…，2026-10-15 實測），data URI 不經過 /media
+    return "data:image/png;base64," + base64.b64encode((ASSETS / name).read_bytes()).decode()
+
+
+ICON = data_uri("taiwanplus_news.png")           # 方形原圖，給分頁圖示
+LOGO = data_uri("taiwanplus_news_wide.png")      # 裁掉白邊的橫式版，給側欄與標題
+st.set_page_config(page_title="新聞部社群成效 Chatbox｜TaiwanPlus News", page_icon=ICON, layout="wide")
 st.logo(LOGO, size="large")
 
 EXAMPLES = [
@@ -99,7 +110,7 @@ def ask(question, deep, history):
     if "conversation" not in st.session_state:
         st.session_state.conversation = client.new_conversation()
 
-    msg = {"role": "assistant", "results": [], "charts": [], "followups": []}
+    msg = {"role": "assistant", "results": [], "charts": []}
     fast_answer = []
     start = time.time()
     label = "⚡ 查詢資料中…"
@@ -115,8 +126,6 @@ def ask(question, deep, history):
                     msg["charts"].append(payload)
                 elif kind == "final":
                     fast_answer.append(payload)
-                elif kind == "followups":
-                    msg["followups"] = payload
                 elif kind == "error":
                     msg["error"] = payload
             status.update(label=f"資料取得完成（{time.time() - start:.0f} 秒）", state="complete")
@@ -172,8 +181,8 @@ with st.sidebar:
         f"\n\n登入：{user_email()}"
     )
 
-head_logo, head_title = st.columns([1, 14], vertical_alignment="center")
-head_logo.image(LOGO, width=64)
+head_logo, head_title = st.columns([1, 10], vertical_alignment="center")
+head_logo.image(LOGO, width=90)
 head_title.title("新聞部社群成效 Chatbox")
 st.caption("用中文或英文問新聞部的社群成效。數字來自 BigQuery 即時查詢；AI 的解讀請搭配「查看資料與 SQL」核對。")
 
@@ -196,12 +205,4 @@ if question:
         msg = ask(question, deep, history)
     st.session_state.messages.append(msg)
 
-# 建議追問（只顯示最新一則回答的）
-last = st.session_state.messages[-1] if st.session_state.messages else None
-if last and last["role"] == "assistant" and last.get("followups"):
-    st.markdown("**可以接著問：**")
-    cols = st.columns(len(last["followups"][:3]))
-    for col, q in zip(cols, last["followups"][:3]):
-        if col.button(q, key=f"fu-{len(st.session_state.messages)}-{q}"):
-            st.session_state.pending = q
-            st.rerun()
+# 不顯示 CA API 的「建議追問」：有些建議的問題資料表裡根本沒有資料可答（2026-10-15 使用者回饋）
