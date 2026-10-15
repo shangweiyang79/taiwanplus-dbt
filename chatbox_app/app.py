@@ -3,11 +3,15 @@
 後端是 Conversational Analytics API 的 Data Agent `news-dept-social`，以唯讀 SA data-chatbox-ro 執行，
 只能讀 news_dept_social（唯讀設計見 ai_context/ca_agent/）。
 
+- 快速：CA API FAST 模式取數並回答，再用 notes.py 的規則補上資料提醒。
+- 深入分析：CA API FAST 模式取數，再由 narrator.py（Gemini Flash）依 agent 的同一套規則串流撰寫分析。
+
 本機執行（在 taiwanplus_dbt/chatbox_app/ 下）：
     streamlit run app.py
 部署：見 README.md
 """
 import json
+import pathlib
 import time
 
 import pandas as pd
@@ -15,9 +19,12 @@ import streamlit as st
 
 from ca_client import ChatClient
 from config import credentials
+from narrator import narrate, unmatched_numbers
 from notes import build_notes, route_mode, scope_line, unsaid
 
-st.set_page_config(page_title="新聞部社群成效 Chatbox", page_icon="📊", layout="wide")
+LOGO = str(pathlib.Path(__file__).parent / "assets" / "taiwanplus_news.png")
+st.set_page_config(page_title="新聞部社群成效 Chatbox｜TaiwanPlus News", page_icon=LOGO, layout="wide")
+st.logo(LOGO, size="large")
 
 EXAMPLES = [
     "新聞部近期社群成效如何？",
@@ -29,8 +36,13 @@ MODES = {"自動": None, "快速": False, "深入分析": True}
 
 
 @st.cache_resource
+def get_credentials():
+    return credentials()
+
+
+@st.cache_resource
 def get_client():
-    return ChatClient(credentials())
+    return ChatClient(get_credentials())
 
 
 def user_email():
@@ -52,11 +64,14 @@ def to_frame(rows):
     return df
 
 
-def render(msg):
+def render(msg, skip_answer=False):
     if msg.get("error"):
         st.error(msg["error"])
-    if msg.get("answer"):
+    if msg.get("answer") and not skip_answer:
         st.markdown(msg["answer"])
+    if msg.get("unmatched"):
+        st.warning("以下數字在查詢結果中找不到完全相同的值（可能是 AI 加總或推算，也可能抄錯），請展開「查看資料與 SQL」核對："
+                   + "、".join(f"{n:,}" for n in msg["unmatched"]))
     if msg.get("notes"):
         st.info("**資料提醒**\n\n" + "\n".join(f"- {n}" for n in msg["notes"]))
     if msg.get("scope"):
@@ -78,46 +93,61 @@ def render(msg):
         st.caption(msg["meta"])
 
 
-def ask(question, thinking):
+def ask(question, deep, history):
+    """問一題並即時顯示；回傳要存進對話紀錄的 msg。"""
     client = get_client()
     if "conversation" not in st.session_state:
         st.session_state.conversation = client.new_conversation()
 
     msg = {"role": "assistant", "results": [], "charts": [], "followups": []}
-    answer_parts = []
+    fast_answer = []
     start = time.time()
-    label = "🧠 深入分析中（約 20–50 秒）…" if thinking else "⚡ 查詢中（約 5–20 秒）…"
+    label = "⚡ 查詢資料中…"
     with st.status(label, expanded=False) as status:
         try:
-            for kind, payload in client.ask(st.session_state.conversation, question, thinking=thinking):
+            for kind, payload in client.ask(st.session_state.conversation, question, thinking=False):
                 if kind == "progress":
-                    first = payload.splitlines()[0][:80]
-                    status.update(label=f"{label}　{first}")
+                    status.update(label=f"{label}　{payload.splitlines()[0][:80]}")
                     st.write(payload[:300])
                 elif kind == "data":
                     msg["results"].append(payload)
                 elif kind == "chart":
                     msg["charts"].append(payload)
                 elif kind == "final":
-                    answer_parts.append(payload)
+                    fast_answer.append(payload)
                 elif kind == "followups":
                     msg["followups"] = payload
                 elif kind == "error":
                     msg["error"] = payload
-            status.update(label="完成", state="complete")
+            status.update(label=f"資料取得完成（{time.time() - start:.0f} 秒）", state="complete")
         except Exception as e:
             msg["error"] = f"查詢失敗：{type(e).__name__}: {e}"
-            status.update(label="失敗", state="error")
+            status.update(label="查詢失敗", state="error")
+    fetch_seconds = round(time.time() - start, 1)
+
+    answer = "\n\n".join(fast_answer)
+    narrated = False
+    if deep and any(r["rows"] for r in msg["results"]):
+        try:
+            answer = st.write_stream(narrate(get_credentials(), question, msg["results"], history))
+            narrated = True
+        except Exception as e:  # 撰寫失敗就退回快速模式的回答
+            log(user=user_email(), question=question, narrator_error=f"{type(e).__name__}: {e}")
+            st.markdown(answer)
+    else:
+        st.markdown(answer)
 
     seconds = round(time.time() - start, 1)
-    answer = "\n\n".join(answer_parts)
     msg["answer"] = answer
+    msg["unmatched"] = unmatched_numbers(answer, msg["results"]) if narrated else []
     msg["notes"] = unsaid(build_notes(msg["results"]), answer)
     if "查詢範圍" not in answer and "Query Scope" not in answer:
         msg["scope"] = scope_line(msg["results"])
-    msg["meta"] = f"{'🧠 深入分析' if thinking else '⚡ 快速'}模式｜{seconds} 秒"
-    log(user=user_email(), question=question, thinking=thinking, seconds=seconds,
-        n_results=len(msg["results"]), error=msg.get("error"))
+    msg["meta"] = (f"🧠 深入分析｜取數 {fetch_seconds} 秒＋撰寫 {round(seconds - fetch_seconds, 1)} 秒" if narrated
+                   else f"⚡ 快速｜{seconds} 秒")
+    render(msg, skip_answer=True)
+    log(user=user_email(), question=question, deep=deep, narrated=narrated, seconds=seconds,
+        fetch_seconds=fetch_seconds, n_results=len(msg["results"]), unmatched=msg["unmatched"], error=msg.get("error"))
     return msg
 
 
@@ -142,7 +172,9 @@ with st.sidebar:
         f"\n\n登入：{user_email()}"
     )
 
-st.title("📊 新聞部社群成效 Chatbox")
+head_logo, head_title = st.columns([1, 14], vertical_alignment="center")
+head_logo.image(LOGO, width=64)
+head_title.title("新聞部社群成效 Chatbox")
 st.caption("用中文或英文問新聞部的社群成效。數字來自 BigQuery 即時查詢；AI 的解讀請搭配「查看資料與 SQL」核對。")
 
 st.session_state.setdefault("messages", [])
@@ -155,13 +187,13 @@ for m in st.session_state.messages:
 
 question = st.chat_input("例如：Talks 今年 IG 的互動率是多少？") or st.session_state.pop("pending", None)
 if question:
+    history = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
-    thinking = MODES[mode] if MODES[mode] is not None else route_mode(question)
+    deep = MODES[mode] if MODES[mode] is not None else route_mode(question)
     with st.chat_message("assistant"):
-        msg = ask(question, thinking)
-        render(msg)
+        msg = ask(question, deep, history)
     st.session_state.messages.append(msg)
 
 # 建議追問（只顯示最新一則回答的）

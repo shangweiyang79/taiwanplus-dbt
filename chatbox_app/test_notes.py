@@ -53,6 +53,13 @@ def test_scope_line_all_units_video_layer():
     assert scope_line(res).startswith("查詢範圍：新聞部（Newsroom + Talks + Connected）｜影片層")
 
 
+def test_top_videos_period_is_whole_month():
+    # 使用者回報：上個月前 5 支影片的查詢範圍顯示 9/1～9/21，應為整個 9 月
+    res = [{"rows": [{"publish_date": "2026-09-01", "views": 51234.0}, {"publish_date": "2026-09-21", "views": 40123.0}],
+            "sql": "FROM `p.news_dept_social.fct_social_post_performance` WHERE dept_scope = 'newsroom' AND platform = 'YouTube'"}]
+    assert "2026-09-01 ～ 2026-09-30" in scope_line(res)
+
+
 def test_period_from_sql_literals_and_unsaid():
     # 實測：SQL 用 WHERE year_month = '2026-05' 篩，結果沒有日期欄位
     res = [{"rows": [], "sql": "SELECT platform, views FROM `p.news_dept_social.agg_news_dept_daily_traffic_monthly` "
@@ -66,6 +73,13 @@ def test_period_from_sql_literals_and_unsaid():
     left = unsaid(notes, answer)
     assert not any(n.startswith("各平台觀看門檻") for n in left)
     assert any("2026-06-01" in n for n in left)
+
+
+def test_unmatched_numbers():
+    from narrator import unmatched_numbers
+    res = [{"rows": [{"views": 2345678.0, "x": 567890}], "sql": ""}]
+    assert unmatched_numbers("8 月 2,345,678，9 月 567,890", res) == []
+    assert unmatched_numbers("8 月 2,345,123，成長 43.1%，約 1,000 萬", res) == [2345123]
 
 
 if __name__ == "__main__":

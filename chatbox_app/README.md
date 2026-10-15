@@ -12,17 +12,24 @@
 | Cloud Run 服務 | `data-chatbox` |
 | 映像 | `asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN` |
 | 執行身分 | `data-chatbox-ro@ivory-airfoil-418408.iam.gserviceaccount.com` |
+| 撰寫模型權限 | 自訂角色 `chatboxGeminiInvoker`，只有 `aiplatform.endpoints.predict`（呼叫 Vertex AI 模型），2026-10-15 經使用者同意授予 SA |
 
 ## 回答模式
 
-PoC 評估結果見 `../ai_context/ca_agent/eval_results/`。
+評估紀錄都在 `../ai_context/ca_agent/eval_results/`。
 
-| 模式 | 延遲 | 什麼時候用 |
-|---|---|---|
-| ⚡ 快速（FAST） | 約 5–20 秒 | 單純查數：多少、列出、前幾名 |
-| 🧠 深入分析（THINKING） | 約 20–50 秒 | 需要判斷：為什麼、是真的嗎、哪個最好、成效如何、比較、趨勢 |
+| 模式 | 流程 | 延遲 | 什麼時候用 |
+|---|---|---|---|
+| ⚡ 快速 | CA API FAST 取數並回答，`notes.py` 補提醒 | 約 5–20 秒 | 單純查數：多少、列出、前幾名 |
+| 🧠 深入分析 | CA API FAST 取數 → `narrator.py` 用 Gemini Flash 串流撰寫分析 | 約 18–25 秒，取完數就開始出字 | 需要判斷：為什麼、是真的嗎、哪個最好、成效如何、比較、趨勢 |
 
 - **「自動」**由 `notes.route_mode` 依關鍵字判斷用哪個模式；側欄可以手動指定。
+- **深入分析為什麼不用 CA API 的 THINKING 模式**（2026-10-15 實測）：
+  - THINKING 一題約 32–34 秒，其中「撰寫分析」占 20–22 秒，而且資料要等到最後才會送回。
+  - 改成「FAST 取數＋`gemini-3.8-flash` 撰寫」後，3 題判斷型問題的品質相當，時間約 18–21 秒。
+  - 撰寫規則直接讀已部署 agent 的 system_instruction，不另存一份。
+  - 撰寫時偶爾會抄錯數字，所以 `narrator.unmatched_numbers` 會檢查回答裡的數字，查詢結果中找不到的會顯示黃色提醒。
+  - 換撰寫模型（`config.NARRATOR_MODEL`）或改 prompt 之後，要跑 `python eval_deep.py` 重新評估。
 - **快速模式**取數正確，但回答常漏掉業務提醒。所以 `notes.build_notes` 會依查詢結果，用固定規則補上提醒：YouTube 8/27 門檻、IG 6/1 換算法、Connected IG 停更、跨平台不可比、本月未完整，以及「查詢範圍」。回答裡已經講過的提醒不會重複附上。
 - **語言**：中文問題會在訊息後面附上「請用繁體中文回答」。實測快速模式不加這句，中文問題常會用英文回答。
 
@@ -86,5 +93,6 @@ gcloud iap web get-iam-policy --resource-type=cloud-run --service=data-chatbox -
 - **改了 `notes.py` 的提醒內容**：要跟 `ai_context/news_dept_social_context.md` 的定義保持一致，改完跑 `python test_notes.py`。
 - **費用**：
   - Cloud Run：閒置時 0。
+  - Gemini Flash（深入分析撰寫）：每題輸入約 1 萬 token，費用不到 1 美分。
   - BigQuery：每題約 0.1–1.6 GB，因為 `news_dept_social` 的表是 view。
   - CA API：本身是否收費待到 Billing 確認。

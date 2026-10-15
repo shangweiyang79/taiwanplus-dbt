@@ -13,6 +13,8 @@ LOCATION = "global"  # CA API 沒有亞洲 endpoint；global 可查 asia-east1 �
 PARENT = f"projects/{PROJECT}/locations/{LOCATION}"
 AGENT_NAME = f"{PARENT}/dataAgents/news-dept-social"  # 由 ai_context/ca_agent/deploy_agent.py 部署
 SA_EMAIL = f"data-chatbox-ro@{PROJECT}.iam.gserviceaccount.com"
+# 深入分析的撰寫模型（Vertex AI）。2026-10-15 實測 3.8-flash 撰寫 6–7.5 秒、穩定；換模型前先跑 eval_deep.py
+NARRATOR_MODEL = "gemini-3.8-flash"
 
 _SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 

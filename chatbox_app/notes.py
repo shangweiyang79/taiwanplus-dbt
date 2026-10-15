@@ -30,13 +30,22 @@ def route_mode(question):
     return bool(THINKING_PATTERN.search(question))
 
 
+def _month_bounds(d):
+    return [d.replace(day=1), d.replace(day=calendar.monthrange(d.year, d.month)[1])]
+
+
 def _dates(rows):
+    """回傳結果涵蓋的日期。`date`（每日）照實際日期；`month_start`、`publish_date` 擴成整個月：
+    排行類問題（例如上個月前 5 支影片）的查詢期間是整個月，不是前 5 支剛好落在的 9/1～9/21。"""
     out = []
     for r in rows:
-        for key in ("date", "month_start", "publish_date"):
+        v = r.get("date")
+        if isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v[:10]):
+            out.append(dt.date.fromisoformat(v[:10]))
+        for key in ("month_start", "publish_date"):
             v = r.get(key)
             if isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v[:10]):
-                out.append(dt.date.fromisoformat(v[:10]))
+                out += _month_bounds(dt.date.fromisoformat(v[:10]))
         ym = r.get("year_month")
         if isinstance(ym, str) and re.fullmatch(r"\d{4}-\d{2}", ym):
             y, m = map(int, ym.split("-"))
@@ -117,6 +126,7 @@ def scope_line(results):
         layers.append("影片層（依發布日累計）")
     parts = [scope, " + ".join(layers) or "—"]
     if period:
-        parts.append(f"{period[0]:%Y-%m-%d} ～ {period[1]:%Y-%m-%d}")
+        end = min(period[1], dt.date.today())  # 本月只算到今天
+        parts.append(f"{period[0]:%Y-%m-%d} ～ {end:%Y-%m-%d}")
     parts.append("、".join(tables))
     return "查詢範圍：" + "｜".join(parts)
