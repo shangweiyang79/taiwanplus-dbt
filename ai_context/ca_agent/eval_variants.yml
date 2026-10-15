@@ -1,0 +1,34 @@
+# run_ca_eval.py 的題目變化版。
+# 原題（eval_questions.yml）也是 agent 的範例查詢，只考原題會高估準確度；
+# 這裡每題各加一個「換句話說」的中文版（paraphrase）和英文版（en），評分標準沿用原題的 expected / must_mention / must_not。
+variants:
+  q1_news_dept_recent:
+    paraphrase: 最近這幾個月新聞部在各社群平台的整體表現怎麼樣？
+    en: How has the news department performed on social media recently?
+  q2_newsroom_yt_last_month:
+    paraphrase: 上月新聞台的 YouTube 一共有幾次觀看？
+    en: How many YouTube views did Newsroom get last month?
+  q3_talks_ig_engagement_rate:
+    paraphrase: 2026 年以來 Taiwan Talks 的 Instagram 互動率大概多少？
+    en: What is Talks' Instagram engagement rate so far this year?
+  q4_connected_ig_recent:
+    paraphrase: CONNECTED 的 IG 帳號這陣子狀況如何？
+    en: How is Connected doing on Instagram lately?
+  q5_best_platform:
+    paraphrase: 新聞部的四個社群平台裡，哪一個最近成績最亮眼？
+    en: Which social platform is performing best for the news department?
+  q6_top_videos:
+    paraphrase: 列出新聞台上個月發布、YouTube 觀看最多的前五支影片
+    en: What were Newsroom's top 5 YouTube videos by views last month?
+  q7_ytd_total:
+    paraphrase: 2026 年 1 月到現在，新聞部社群累積觀看是多少？
+    en: How many total views has the news department had year to date?
+  q8_youtube_definition_change:
+    paraphrase: 新聞部 YouTube 9 月觀看數比 7 月高很多，這個成長是實際的嗎？
+    en: News department YouTube views in September are much higher than July. Is that real growth?
+  q9_why_talks_september:
+    paraphrase: Talks 九月成績變好的原因是什麼？
+    en: Why did Talks perform better in September?
+  q10_may_overall:
+    paraphrase: 幫我看一下新聞部今年五月的社群總體表現
+    en: How did the news department perform overall in May 2026?
