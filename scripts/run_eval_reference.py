@@ -7,12 +7,13 @@
 """
 import argparse
 import os
+import sys
 
 import yaml
 from google.cloud import bigquery
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECT = "ivory-airfoil-418408"
+PROJECT = os.environ.get("GCP_PROJECT") or sys.exit("請先設定環境變數 GCP_PROJECT（GCP 專案 ID，見 .env.example）")
 
 
 def main():
@@ -28,7 +29,7 @@ def main():
     for q in questions:
         if args.only and q["id"] not in args.only:
             continue
-        sql = q["reference_sql"].replace(f"{PROJECT}.news_dept_social.", f"{PROJECT}.{args.dataset}.")
+        sql = q["reference_sql"].replace("${GCP_PROJECT}.news_dept_social.", f"{PROJECT}.{args.dataset}.")
         print(f"\n## {q['id']}：{q['question']}")
         for key, value in q["expected"].items():
             print(f"   {key}: {value}")

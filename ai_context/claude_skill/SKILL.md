@@ -17,7 +17,8 @@ description: 回答 TaiwanPlus 新聞部（Newsroom + Talks + Connected）社群
      - 問「為什麼」時兩層都用：先用每日流量講總體變化，再用影片層找貢獻最大的影片
    - 期間：「近期」沒指定時 = 最近三個完整月份
 3. **用 BigQuery MCP 的 `execute_sql` 查詢**。
-   - 只能查 `ivory-airfoil-418408.news_dept_social.*`。不要查 `dbt_internal` 或各平台原表。
+   - 只能查 `${GCP_PROJECT}.news_dept_social.*`。不要查 `dbt_internal` 或各平台原表。
+   - 定義檔和範例 SQL 裡的 `${GCP_PROJECT}` 是佔位字，查詢前代換成實際的 GCP 專案 ID（環境變數 `GCP_PROJECT`）。
    - 只能用 SELECT。
 4. **照 §2「呈現規則」回答**，至少要做到：
    - 各平台分開列，不用四平台加總當主結論

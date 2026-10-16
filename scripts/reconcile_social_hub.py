@@ -9,11 +9,12 @@
     python scripts/reconcile_social_hub.py --views vod_category v_vertical_monthly
 """
 import argparse
+import os
 import sys
 
 from google.cloud import bigquery
 
-PROJECT = "ivory-airfoil-418408"
+PROJECT = os.environ.get("GCP_PROJECT") or sys.exit("請先設定環境變數 GCP_PROJECT（GCP 專案 ID，見 .env.example）")
 VIEWS = [
     "vod_category",
     "v_metrics_youtube",

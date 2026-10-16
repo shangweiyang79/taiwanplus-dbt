@@ -32,7 +32,7 @@ questions:
       - 不提 8/27 門檻放寬，就把 YouTube Views 的成長當成表現變好
     reference_sql: |
       SELECT year_month, dept_scope, platform, views, story_views, engaged_views, days_with_data, source_method
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
         AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
       ORDER BY dept_scope, platform, year_month
@@ -52,7 +52,7 @@ questions:
       - 用影片層（上個月發布的影片累計觀看）回答
     reference_sql: |
       SELECT year_month, views, engaged_views, days_with_data
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
 
@@ -72,7 +72,7 @@ questions:
     reference_sql: |
       SELECT SUM(engagements) AS engagements, SUM(video_views) AS video_views,
              SAFE_DIVIDE(SUM(engagements), SUM(video_views)) AS engagement_rate
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_social_monthly`
       WHERE dept_scope = 'talks' AND platform = 'Instagram'
         AND month_start >= DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), YEAR)
 
@@ -91,8 +91,8 @@ questions:
       - 把觀看下滑解讀成「表現很差」
     reference_sql: |
       SELECT a.year_month, a.views, a.story_views, d.active_to, d.note
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly` a
-      JOIN `ivory-airfoil-418408.news_dept_social.dept_accounts` d USING (dept_scope, platform)
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly` a
+      JOIN `${GCP_PROJECT}.news_dept_social.dept_accounts` d USING (dept_scope, platform)
       WHERE a.dept_scope = 'connected' AND a.platform = 'Instagram'
         AND a.month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
         AND a.month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
@@ -117,7 +117,7 @@ questions:
       -- mom_growth 用 KPI（views）；YouTube 另附 engaged_mom_growth 參考（跨 8/27）
       WITH m AS (
         SELECT month_start, platform, SUM(views) AS views, SUM(engaged_views) AS engaged_views
-        FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+        FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
         WHERE month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
           AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
         GROUP BY 1, 2
@@ -143,7 +143,7 @@ questions:
       - 從每日流量或月彙總表回答（沒有單則影片）
     reference_sql: |
       SELECT platform_title, link, publish_date, views, engaged_views
-      FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+      FROM `${GCP_PROJECT}.news_dept_social.fct_social_post_performance`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
       ORDER BY views DESC
@@ -165,7 +165,7 @@ questions:
       - 用影片層（今年發布影片的累計觀看）回答
     reference_sql: |
       SELECT platform, SUM(views) AS views, SUM(story_views) AS story_views, SUM(engaged_views) AS engaged_views
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE month_start >= DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), YEAR)
       GROUP BY platform ORDER BY platform
 
@@ -186,7 +186,7 @@ questions:
     reference_sql: |
       SELECT dept_scope, year_month, views, engaged_views,
              ROUND(SAFE_DIVIDE(views, engaged_views), 2) AS views_per_engaged
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE platform = 'YouTube' AND year_month IN ('2026-07', '2026-09')
       ORDER BY dept_scope, year_month
 
@@ -209,13 +209,13 @@ questions:
       -- 第一段：每日流量的總體變化
       SELECT 'traffic' AS layer, platform, year_month, views, engaged_views,
              CAST(NULL AS STRING) AS title, CAST(NULL AS STRING) AS link
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE dept_scope = 'talks' AND year_month IN ('2026-08', '2026-09')
       UNION ALL
       -- 第二段：9 月發布、累計觀看最高的影片
       SELECT * FROM (
         SELECT 'top_video', platform, year_month, views, engaged_views, platform_title, link
-        FROM `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+        FROM `${GCP_PROJECT}.news_dept_social.fct_social_post_performance`
         WHERE dept_scope = 'talks' AND year_month = '2026-09'
         ORDER BY views DESC LIMIT 5
       )
@@ -235,6 +235,6 @@ questions:
       - 把 5 月 IG 與 6 月以後的 IG 直接比較而不說明換算法
     reference_sql: |
       SELECT dept_scope, platform, views, story_views, engaged_views, days_with_data, source_method
-      FROM `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE year_month = '2026-05'
       ORDER BY dept_scope, platform

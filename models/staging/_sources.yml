@@ -6,7 +6,7 @@ version: 2
 
 sources:
   - name: youtube
-    database: ivory-airfoil-418408
+    database: "{{ target.database }}"
     schema: youtube_channel_summary
     tables:
       - name: video_news_broad
@@ -45,7 +45,7 @@ sources:
           以 YouTube video_id 為主鍵。source = 'shorts_gemini' 的是 Shorts，分類另由 social_hub.yt_shorts 提供。
 
   - name: youtube_owner
-    database: ivory-airfoil-418408
+    database: "{{ target.database }}"
     schema: youtube_taiwanplus_owner
     description: YouTube Reporting API 的 content owner 報表（BQ Data Transfer 每日匯入）。
     tables:
@@ -55,7 +55,7 @@ sources:
         description: 影片 metadata（含 channel_id），依 _PARTITIONDATE 每日快照，取最新分區。
 
   - name: instagram
-    database: ivory-airfoil-418408
+    database: "{{ target.database }}"
     schema: Instagram_data
     description: Instagram reels 的每日累計快照，同一支 reel 會有很多列，必須取最新 data_date 那一列，不能 SUM。
     config:
@@ -93,7 +93,7 @@ sources:
           freshness: null
 
   - name: facebook
-    database: ivory-airfoil-418408
+    database: "{{ target.database }}"
     schema: Facebook_data
     tables:
       - name: TaiwanPlus_news
@@ -117,7 +117,7 @@ sources:
             data_tests: [unique, not_null]
 
   - name: x
-    database: ivory-airfoil-418408
+    database: "{{ target.database }}"
     schema: X_data
     tables:
       - name: daily_traffic
@@ -140,7 +140,7 @@ sources:
             data_tests: [not_null]
 
   - name: social_hub
-    database: ivory-airfoil-418408
+    database: "{{ target.database }}"
     schema: social_hub
     tables:
       - name: post_map

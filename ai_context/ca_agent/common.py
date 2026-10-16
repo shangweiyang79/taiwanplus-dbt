@@ -1,8 +1,11 @@
 """ca_agent 各腳本共用的常數與憑證。"""
+import os
+import sys
+
 import google.auth
 from google.auth import impersonated_credentials
 
-PROJECT = "ivory-airfoil-418408"
+PROJECT = os.environ.get("GCP_PROJECT") or sys.exit("請先設定環境變數 GCP_PROJECT（GCP 專案 ID，見 .env.example）")
 LOCATION = "global"  # CA API 沒有亞洲 endpoint；global 可查 asia-east1 的 dataset
 PARENT = f"projects/{PROJECT}/locations/{LOCATION}"
 AGENT_ID = "news-dept-social"
@@ -14,7 +17,7 @@ _SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
 def operator_credentials():
-    """操作者自己的 ADC。gcloud 預設 quota project 是 taiwanplus-member-71778，改掛本專案。"""
+    """操作者自己的 ADC。gcloud 預設的 quota project 可能是別的專案，改掛本專案。"""
     creds, _ = google.auth.default(scopes=_SCOPES)
     return creds.with_quota_project(PROJECT)
 

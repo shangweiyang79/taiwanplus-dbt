@@ -8,10 +8,10 @@
 
 | 資源 | 名稱 |
 |---|---|
-| 專案 / 區域 | `ivory-airfoil-418408` / `asia-east1` |
+| 專案 / 區域 | `<gcp-project>` / `asia-east1` |
 | Cloud Run 服務 | `data-chatbox` |
-| 映像 | `asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN` |
-| 執行身分 | `data-chatbox-ro@ivory-airfoil-418408.iam.gserviceaccount.com` |
+| 映像 | `asia-east1-docker.pkg.dev/<gcp-project>/data-chatbox/app:vN` |
+| 執行身分 | `data-chatbox-ro@<gcp-project>.iam.gserviceaccount.com` |
 | 撰寫模型權限 | 自訂角色 `chatboxGeminiInvoker`，只有 `aiplatform.endpoints.predict`（呼叫 Vertex AI 模型），2026-10-15 經使用者同意授予 SA |
 
 ## 回答模式
@@ -44,13 +44,14 @@
 ```bash
 cd taiwanplus_dbt/chatbox_app
 pip install -r requirements.txt
+export GCP_PROJECT=<gcp-project>   # 專案 ID 不寫進程式碼（repo 是公開的）；Cloud Run 上沒設時自動用服務所在的專案
 python test_notes.py
 streamlit run app.py      # 本機會模擬 data-chatbox-ro，你需要在 SA 上有 serviceAccountTokenCreator
 ```
 
 ## 部署 / 更新
 
-gcloud 預設專案不是 ivory 時，每個指令都要加 `--project=ivory-airfoil-418408 --billing-project=ivory-airfoil-418408`。
+gcloud 預設專案不是 ivory 時，每個指令都要加 `--project=<gcp-project> --billing-project=<gcp-project>`。
 
 ```bash
 # 0.（只有第一次）啟用 API、建 Artifact Registry、建立 IAP service agent
@@ -60,19 +61,19 @@ gcloud beta services identity create --service=iap.googleapis.com
 
 # 1. 建映像（先查目前的 tag，用下一號，不要覆寫舊號碼）
 gcloud run services describe data-chatbox --region=asia-east1 --format="value(spec.template.spec.containers[0].image)"
-gcloud builds submit --tag asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN
+gcloud builds submit --tag asia-east1-docker.pkg.dev/<gcp-project>/data-chatbox/app:vN
 
 # 2. 部署（IAP 直接掛在 Cloud Run 上，不需要 Load Balancer）
 gcloud run deploy data-chatbox --region=asia-east1 \
-    --image=asia-east1-docker.pkg.dev/ivory-airfoil-418408/data-chatbox/app:vN \
-    --service-account=data-chatbox-ro@ivory-airfoil-418408.iam.gserviceaccount.com \
+    --image=asia-east1-docker.pkg.dev/<gcp-project>/data-chatbox/app:vN \
+    --service-account=data-chatbox-ro@<gcp-project>.iam.gserviceaccount.com \
     --no-allow-unauthenticated --iap \
     --session-affinity --timeout=3600 \
     --cpu=1 --memory=1Gi --min-instances=0 --max-instances=2 --concurrency=20
 
 # 3.（只有第一次）讓 IAP 能呼叫服務
 gcloud run services add-iam-policy-binding data-chatbox --region=asia-east1 \
-    --member=serviceAccount:service-844960873125@gcp-sa-iap.iam.gserviceaccount.com \
+    --member=serviceAccount:service-<project-number>@gcp-sa-iap.iam.gserviceaccount.com \
     --role=roles/run.invoker
 ```
 
@@ -82,15 +83,15 @@ gcloud run services add-iam-policy-binding data-chatbox --region=asia-east1 \
 ## 開放給誰用
 
 ```bash
-# 加人（或改成 group:xxx@pts.org.tw 開給整個群組）
+# 加人（或改成 group:xxx@<your-domain> 開給整個群組）
 gcloud iap web add-iam-policy-binding --resource-type=cloud-run --service=data-chatbox --region=asia-east1 \
-    --member=user:someone@pts.org.tw --role=roles/iap.httpsResourceAccessor
+    --member=user:someone@<your-domain> --role=roles/iap.httpsResourceAccessor
 
 # 看目前有誰
 gcloud iap web get-iam-policy --resource-type=cloud-run --service=data-chatbox --region=asia-east1
 ```
 
-2026-10-15 首次上線時只開給 `joy.yang@pts.org.tw`。
+2026-10-15 首次上線時只開給 `<you@your-domain>`。
 
 ## 維運
 

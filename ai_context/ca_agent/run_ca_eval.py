@@ -84,7 +84,7 @@ def ask(chat_client, question, thinking=False):
 
 
 def reference(bq, q):
-    rows = [dict(r) for r in bq.query(q["reference_sql"]).result()]
+    rows = [dict(r) for r in bq.query(q["reference_sql"].replace("${GCP_PROJECT}", PROJECT)).result()]
     return rows
 
 

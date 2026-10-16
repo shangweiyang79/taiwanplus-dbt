@@ -68,13 +68,14 @@ def system_instruction():
     m = re.search(r"^## 1\. .*?(?=^## 3\. )", md, flags=re.S | re.M)
     if not m:
         sys.exit(f"{CONTEXT_MD} 找不到 §1～§2，請先重跑 scripts/build_ai_context.py")
-    return HEADER.format(project=PROJECT, dataset=DATASET) + "\n" + m.group(0).strip() + "\n"
+    body = m.group(0).strip().replace("${GCP_PROJECT}", PROJECT)
+    return HEADER.format(project=PROJECT, dataset=DATASET) + "\n" + body + "\n"
 
 
 def example_queries():
     with open(os.path.join(ROOT, "ai_context", "eval_questions.yml"), encoding="utf-8") as f:
         questions = yaml.safe_load(f)["questions"]
-    return [{"question": q["question"], "sql": q["reference_sql"].strip()} for q in questions]
+    return [{"question": q["question"], "sql": q["reference_sql"].strip().replace("${GCP_PROJECT}", PROJECT)} for q in questions]
 
 
 def main():

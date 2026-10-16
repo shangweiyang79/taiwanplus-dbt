@@ -16,16 +16,17 @@ import argparse
 import datetime
 import json
 import os
+import sys
 import shutil
 import subprocess
 import time
 
 from google.cloud import bigquery
 
-PROJECT = "ivory-airfoil-418408"
+PROJECT = os.environ.get("GCP_PROJECT") or sys.exit("請先設定環境變數 GCP_PROJECT（GCP 專案 ID，見 .env.example）")
 SA_ID = "data-chatbox-ro"
 SA_EMAIL = f"{SA_ID}@{PROJECT}.iam.gserviceaccount.com"
-OPERATOR = "joy.yang@pts.org.tw"  # 跑評估腳本時要模擬 SA 的人
+OPERATOR = os.environ.get("OPERATOR_EMAIL") or sys.exit("請先設定環境變數 OPERATOR_EMAIL（跑評估腳本時要模擬 SA 的人，見 .env.example）")
 
 PROJECT_ROLES = [
     "roles/bigquery.jobUser",

@@ -18,12 +18,13 @@ ARIMA 訓練又會乘上候選模型數）。ARIMA 模型建在 dbt_joy，跑完
 """
 import datetime as dt
 import os
+import sys
 
 import pandas as pd
 from google.cloud import bigquery
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROJECT = "ivory-airfoil-418408"
+PROJECT = os.environ.get("GCP_PROJECT") or sys.exit("請先設定環境變數 GCP_PROJECT（GCP 專案 ID，見 .env.example）")
 DEV = f"{PROJECT}.dbt_joy"
 SERIES = f"{DEV}.fc_daily_series"
 DATA_END = dt.date(2026, 10, 10)  # 四個平台都有完整資料的最後一天

@@ -1,8 +1,8 @@
 # TaiwanPlus 新聞部社群成效：AI 查詢說明
 
-> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-13），**不要手改**。
+> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-16），**不要手改**。
 > 定義的來源是 dbt 專案：`models/docs/_definitions.md`、`models/marts/_marts.yml`、`seeds/`。
-> 資料庫是 BigQuery（專案 `ivory-airfoil-418408`，位置 asia-east1），SQL 一律用 GoogleSQL。
+> 資料庫是 BigQuery（專案 `${GCP_PROJECT}`，查詢時代換成實際的專案 ID；位置 asia-east1），SQL 一律用 GoogleSQL。
 
 ## 1. 業務定義
 
@@ -123,7 +123,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 
 ## 3. 資料表
 
-### `ivory-airfoil-418408.news_dept_social.agg_news_dept_daily_traffic_monthly`
+### `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
 
 一列 = 月 × 新聞部單位 × 平台，新聞部「總體成效」的認證匯總表（每日流量）。 問總體成效、趨勢、某月總共多少觀看時直接讀這張，不要自己從明細加總。 **新聞部（News Department）= Newsroom + Talks + Connected 三個單位。**
 
@@ -143,7 +143,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `source_method` | 資料算法。IG 出現 reel_snapshot_delta 代表 2026-06 之前的快照算法，通常比 API 偏高 10～20%。 |
 | `is_current_month` | 是否為本月（台北時間），本月資料不完整。 |
 
-### `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
+### `${GCP_PROJECT}.news_dept_social.fct_daily_traffic`
 
 一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story），新聞部每日流量的主表。
 
@@ -162,7 +162,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `watch_time_hours` | 當天的觀看時數。IG 為逐支 reel 快照相減（已排除 API 漏抓造成的負數）；FB 由分鐘換算；Stories 為 NULL。 |
 | `source_method` | 資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/ reel_snapshot_delta（IG 2026-06-01 前，逐支 reel 快照相減）/ story_by_publish_date（IG Stories）。 |
 
-### `ivory-airfoil-418408.news_dept_social.agg_news_dept_social_monthly`
+### `${GCP_PROJECT}.news_dept_social.agg_news_dept_social_monthly`
 
 一列 = 月 × 新聞部單位 × 平台，新聞部社群成效的認證匯總表。 常見問題（新聞部 / 各單位 / 各平台的逐月成效）直接查這張，不要從明細自己加總。 **新聞部（News Department）= Newsroom + Talks + Connected 三個單位。**
 
@@ -183,7 +183,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `is_current_month` | 是否為本月（台北時間）。本月資料不完整，數字天生偏低。 |
 | `days_since_month_end` | 該月最後一天距今幾天。負數 = 本月尚未結束；數字愈小，累計愈不完整。 |
 
-### `ivory-airfoil-418408.news_dept_social.fct_social_post_performance`
+### `${GCP_PROJECT}.news_dept_social.fct_social_post_performance`
 
 一列 = 新聞部（Newsroom + Talks + Connected）在任一平台上的一則影片貼文，是新聞部社群成效的主表。
 
@@ -215,7 +215,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `new_category` | 主題分類（9 大類，雲端分類 pipeline 產出，只有 Newsroom 的 VOD 有）。 |
 | `tags_text` | 正規化後的 tag，以逗號串接。 |
 
-### `ivory-airfoil-418408.news_dept_social.dept_accounts`
+### `${GCP_PROJECT}.news_dept_social.dept_accounts`
 
 新聞部單位 × 平台 × 原表對照。**新聞部（News Department）= Newsroom + Talks + Connected 三個單位。**
 
@@ -228,7 +228,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `active_to` | 停更日期。NULL 表示仍在經營。 |
 | `note` | 備註。 |
 
-### `ivory-airfoil-418408.news_dept_social.platform_metric_glossary`
+### `${GCP_PROJECT}.news_dept_social.platform_metric_glossary`
 
 各平台指標對照表：統一指標名稱（canonical_metric）對應到各平台的原生欄位與平台上的名稱。 **影片觀看數，是「社群成效」的預設主指標。**
 
@@ -242,7 +242,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `cross_platform_comparable` | 能否直接跨平台比較絕對值。 |
 | `note` | 備註。 |
 
-### `ivory-airfoil-418408.news_dept_social.youtube_channels`
+### `${GCP_PROJECT}.news_dept_social.youtube_channels`
 
 新聞部 YouTube 頻道 → 單位對照，每日流量層用它把頻道歸到 newsroom / talks / connected。
 
@@ -290,7 +290,7 @@ SELECT
   platform,
   SUM(views) AS traffic_views,
   SUM(engaged_views) AS traffic_engaged_views
-FROM `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
+FROM `${GCP_PROJECT}.news_dept_social.fct_daily_traffic`
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 ```
@@ -305,7 +305,7 @@ SELECT
   platform,
   SUM(views) AS traffic_views,
   SUM(engaged_views) AS traffic_engaged_views
-FROM `ivory-airfoil-418408.news_dept_social.fct_daily_traffic`
+FROM `${GCP_PROJECT}.news_dept_social.fct_daily_traffic`
 WHERE dept_scope = 'newsroom'
 GROUP BY 1, 2
 ORDER BY 1, 2

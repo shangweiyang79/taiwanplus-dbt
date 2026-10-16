@@ -21,6 +21,8 @@ OUT_DIR = os.path.join(ROOT, "ai_context")
 OUT_FILE = os.path.join(OUT_DIR, "news_dept_social_context.md")
 
 PROJECT = "taiwanplus_dbt"
+# 產出的表名用這個佔位字代替 GCP 專案 ID（repo 是公開的）；agent 設定與評估腳本執行前會代換成環境變數 GCP_PROJECT
+GCP_PROJECT = "${GCP_PROJECT}"
 # 給 AI 看的表，依重要性排序：總體成效（每日流量）→ 原因分析（影片層）→ 對照表
 TABLES = [
     "agg_news_dept_daily_traffic_monthly",
@@ -49,7 +51,7 @@ def load(name):
 
 
 def relation(node):
-    return f"`{node['database']}.{node['schema']}.{node.get('alias') or node['name']}`"
+    return f"`{GCP_PROJECT}.{node['schema']}.{node.get('alias') or node['name']}`"
 
 
 def find_node(manifest, name):
@@ -157,7 +159,7 @@ def main():
     sem = load("semantic_manifest.json")
     metrics = {m["name"]: m for m in sem["metrics"]}
     model_relations = {
-        sm["name"]: f"`{sm['node_relation']['database']}.{sm['node_relation']['schema_name']}.{sm['node_relation']['alias']}`"
+        sm["name"]: f"`{GCP_PROJECT}.{sm['node_relation']['schema_name']}.{sm['node_relation']['alias']}`"
         for sm in sem["semantic_models"]
     }
 
@@ -166,7 +168,7 @@ def main():
         "",
         f"> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（{datetime.date.today().isoformat()}），**不要手改**。",
         "> 定義的來源是 dbt 專案：`models/docs/_definitions.md`、`models/marts/_marts.yml`、`seeds/`。",
-        "> 資料庫是 BigQuery（專案 `ivory-airfoil-418408`，位置 asia-east1），SQL 一律用 GoogleSQL。",
+        "> 資料庫是 BigQuery（專案 `${GCP_PROJECT}`，查詢時代換成實際的專案 ID；位置 asia-east1），SQL 一律用 GoogleSQL。",
         "",
         "## 1. 業務定義",
         "",

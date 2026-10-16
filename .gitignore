@@ -12,3 +12,11 @@ dbt_internal_packages/
 
 # Data Chatbox：dataset ACL 備份含帳號與權限清單，只留本機（還原用）
 ai_context/ca_agent/acl_backup/
+
+# 產生的 Data Agent 設定含實際專案 ID（repo 是公開的），由 build_agent_config.py 在本機產生
+ai_context/ca_agent/agent_config.yaml
+
+# 含實際業務數字的輸出只留在本機：逐題評估紀錄（摘要見 eval_results/SUMMARY.md）、回測逐點結果（相對誤差見 .md）
+ai_context/ca_agent/eval_results/*.md
+!ai_context/ca_agent/eval_results/SUMMARY.md
+analyses/forecast_backtest_results.csv
