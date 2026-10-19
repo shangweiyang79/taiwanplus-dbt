@@ -27,14 +27,14 @@ ASSETS = pathlib.Path(__file__).parent / "assets"
 
 
 def data_uri(name):
-    # 用 data URI 而不是檔案路徑：Streamlit 1.57 的 /media 路徑經過 IAP 時會回 500
-    # （Expected ASGI message 'http.response.start'…，2026-10-15 實測），data URI 不經過 /media
+    # 用 data URI 而不是檔案路徑：data URI 不經過 /media。原本的 /media 500 其實是 starlette 1.8+
+    # 的相容問題、跟 IAP 無關（見 requirements.txt），已鎖版本；data URI 保留當保險
     return "data:image/png;base64," + base64.b64encode((ASSETS / name).read_bytes()).decode()
 
 
 ICON = data_uri("taiwanplus_news.png")           # 方形原圖，給分頁圖示
 LOGO = data_uri("taiwanplus_news_wide.png")      # 裁掉白邊的橫式版，給側欄與標題
-st.set_page_config(page_title="新聞部社群成效 Chatbox｜TaiwanPlus News", page_icon=ICON, layout="wide")
+st.set_page_config(page_title="新聞部社群成效AI助理｜TaiwanPlus News", page_icon=ICON, layout="wide")
 st.logo(LOGO, size="large")
 
 EXAMPLES = [
@@ -178,13 +178,14 @@ with st.sidebar:
     st.caption(
         "資料：新聞部（Newsroom + Talks + Connected）在 YouTube / Instagram / Facebook / X 的觀看與互動，"
         "來源 BigQuery `news_dept_social`。只能讀取，不會修改任何資料。"
+        "\n\n數字來自 BigQuery 即時查詢；AI 的解讀請搭配「查看資料與 SQL」核對。"
         f"\n\n登入：{user_email()}"
     )
 
 head_logo, head_title = st.columns([1, 10], vertical_alignment="center")
 head_logo.image(LOGO, width=90)
-head_title.title("新聞部社群成效 Chatbox")
-st.caption("用中文或英文問新聞部的社群成效。數字來自 BigQuery 即時查詢；AI 的解讀請搭配「查看資料與 SQL」核對。")
+head_title.title("新聞部社群成效AI助理")
+st.caption("用中文或英文問新聞部的社群成效。")
 
 st.session_state.setdefault("messages", [])
 for m in st.session_state.messages:

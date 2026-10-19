@@ -1,4 +1,7 @@
 streamlit==1.57.0
+# starlette 1.8.0 起，Streamlit 1.57 的檔案回應（/favicon.png、/media）會 500：
+# Expected ASGI message 'http.response.start'…（2026-10-19 本機二分確認，1.7.0 正常）
+starlette==1.7.0
 google-cloud-geminidataanalytics==0.13.5
 google-genai==1.59.0
 google-auth>=2.40

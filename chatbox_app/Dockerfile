@@ -13,7 +13,8 @@ COPY assets/ ./assets/
 COPY *.py ./
 
 # 規則（模式判斷、資料提醒）有錯就讓 build 失敗，而不是上線後才發現
-RUN python test_notes.py && python -c "import ca_client, notes, config, narrator"
+# import 檢查只需要一個專案 ID 字串；假值只在這一行有效，執行時仍由 Cloud Run 決定
+RUN export GCP_PROJECT=build-check && python test_notes.py && python -c "import ca_client, notes, config, narrator"
 
 # Cloud Run 會給 PORT（預設 8080）
 CMD ["sh", "-c", "streamlit run app.py --server.port=${PORT:-8080} --server.address=0.0.0.0"]
