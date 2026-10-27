@@ -4,18 +4,18 @@
 --   2026-06-01 之前：逐支 reel 快照相減（stg_daily__instagram_reel_deltas，source_method = reel_snapshot_delta）。
 --                    和之後的官方 API 相比通常偏高 10～20%（Total Plays 與 API views 的定義差異）。
 --   2026-06-01 起：官方 API（daily_ig_summary_report_new，source_method = api）。
--- 觀看時數：API 不提供，所有期間都用逐支 reel 快照相減。
---   不用 daily_ig_summary_report(_new) 的時數欄位：它們是帳號總和相減，API 漏抓時會出現大幅負數
---   （2026-07 Newsroom 出現大幅負數），處理方式見 stg_daily__instagram_reel_deltas。
+-- 觀看時數：API 不提供，所有期間都讀 Instagram_data.ig_daily_watch_hours，與 IG 每日報表同一份數字：
+--   2026-10-25 前是人工校正過的 IG_daily_traffic.xlsx 歷史，2026-10-26 起由該 view 逐支 reel 差分計算，不會有負數。
+--   定義見 TaiwanPlus_api/sql/ig_daily_watch_hours.sql。
 -- 起始日 2025-08-01，與原本的 IG 每日報表一致。Program（IG Social）不屬於新聞部，不取。
 
 {%- set cutover = "date '2026-06-01'" %}
 {%- set accounts = [('News', 'newsroom'), ('Talks', 'talks'), ('Connected', 'connected')] %}
 
 with reel as (
-  select date, dept_scope, plays, watch_hours
+  select date, dept_scope, plays
   from {{ ref('stg_daily__instagram_reel_deltas') }}
-  where date >= date '2025-08-01'
+  where date >= date '2025-08-01' and date < {{ cutover }}
 ),
 api as (
 {% for col, scope in accounts %}
@@ -28,17 +28,32 @@ api as (
   where Date >= {{ cutover }}
   {% if not loop.last %}union all{% endif %}
 {% endfor %}
+),
+wh as (
+  select
+    date,
+    case account {% for col, scope in accounts %}when '{{ col }}' then '{{ scope }}' {% endfor %}end as dept_scope,
+    watch_hours
+  from {{ source('instagram', 'ig_daily_watch_hours') }}
+  where date >= date '2025-08-01'
+    and granularity = 'day'
+    and account in ({% for col, scope in accounts %}'{{ col }}'{% if not loop.last %}, {% endif %}{% endfor %})
+),
+views as (
+  select date, dept_scope, plays as views, cast(null as int64) as paid_views from reel
+  union all
+  select date, dept_scope, views, paid_views from api
 )
 select
-  coalesce(r.date, a.date)                          as date,
-  coalesce(r.dept_scope, a.dept_scope)              as dept_scope,
+  coalesce(v.date, w.date)                          as date,
+  coalesce(v.dept_scope, w.dept_scope)              as dept_scope,
   'Instagram'                                       as platform,
   'video'                                           as content_type,
-  if(coalesce(r.date, a.date) < {{ cutover }}, r.plays, a.views) as views,
-  a.paid_views,
+  v.views,
+  v.paid_views,
   cast(null as int64)                               as engaged_views,
-  r.watch_hours                                     as watch_time_hours,
-  if(coalesce(r.date, a.date) < {{ cutover }}, 'reel_snapshot_delta', 'api') as source_method
-from reel r
-full join api a
-  on r.date = a.date and r.dept_scope = a.dept_scope
+  w.watch_hours                                     as watch_time_hours,
+  if(coalesce(v.date, w.date) < {{ cutover }}, 'reel_snapshot_delta', 'api') as source_method
+from views v
+full join wh w
+  on v.date = w.date and v.dept_scope = w.dept_scope

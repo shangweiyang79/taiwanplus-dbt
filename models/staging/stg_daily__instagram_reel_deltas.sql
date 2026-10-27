@@ -1,10 +1,12 @@
--- 一列 = 日 × 新聞部單位，IG 每日新增的觀看數與觀看時數，由每支 reel 的累計快照逐支相減而來。
+-- 一列 = 日 × 新聞部單位，IG 每日新增的觀看數，由每支 reel 的累計快照逐支相減而來。
+-- 只用於 2026-06-01 前的觀看數（之後改用官方 API）。觀看時數不在這裡算，改讀 Instagram_data.ig_daily_watch_hours
+-- （同樣的逐支差分規則，但 2026-10-25 前用人工校正的 Excel 歷史），見 stg_daily__instagram。
 --
 -- 為什麼不用「帳號總和減前一天」：IG API 偶爾漏回傳或回傳錯誤，帳號總和相減會產生大幅負數：
 --   1. 某支影片某天沒回傳、隔天又出現（例：2026-06-29、2026-07-25）→ 一天負、隔天補回。
 --   2. 一批影片從某天起永久不再回傳（例：2026-07-14 Newsroom 回傳的影片數少了一半以上）
---      → 總和一次少掉大量時數，7 月時數變成負數。
---   3. 某天一批影片的時數回傳 0、隔天恢復（例：2025-11-28、2026-06-02 的 Newsroom）
+--      → 總和一次少掉大量數字，7 月時數變成負數。
+--   3. 某天一批影片的數字回傳 0、隔天恢復（例：2025-11-28、2026-06-02 的 Newsroom）
 --      → 單日出現大幅負數、隔天補回。
 --
 -- 處理方式：
@@ -26,8 +28,7 @@ with snapshots as (
     link,
     any_value(release_date)                         as release_date,
     -- 同一天同一支影片偶有重複列（Talks 實測），取最大值
-    max(`Total Plays`)                              as plays,
-    max(`View total time_hrs`)                      as watch_hours
+    max(`Total Plays`)                              as plays
   from {{ source('instagram', tbl) }}
   where link is not null
   group by 1, 2, 3
@@ -40,8 +41,7 @@ cleaned as (
     data_date,
     link,
     release_date,
-    max(plays) over reel_history                    as plays,
-    max(watch_hours) over reel_history              as watch_hours
+    max(plays) over reel_history                    as plays
   from snapshots
   window reel_history as (partition by dept_scope, link order by data_date rows between unbounded preceding and current row)
 ),
@@ -49,7 +49,6 @@ with_prev as (
   select
     *,
     lag(plays) over reel                            as prev_plays,
-    lag(watch_hours) over reel                      as prev_watch_hours,
     lag(data_date) over reel                        as prev_date,
     min(data_date) over (partition by dept_scope)   as account_first_date
   from cleaned
@@ -64,19 +63,12 @@ reel_deltas as (
       when data_date > account_first_date
        and release_date >= date_sub(data_date, interval 3 day) then plays
       else 0
-    end                                             as plays_delta,
-    case
-      when prev_date is not null then watch_hours - prev_watch_hours
-      when data_date > account_first_date
-       and release_date >= date_sub(data_date, interval 3 day) then watch_hours
-      else 0
-    end                                             as watch_hours_delta
+    end                                             as plays_delta
   from with_prev
 )
 select
   date,
   dept_scope,
-  sum(plays_delta)                                  as plays,
-  sum(watch_hours_delta)                            as watch_hours
+  sum(plays_delta)                                  as plays
 from reel_deltas
 group by date, dept_scope

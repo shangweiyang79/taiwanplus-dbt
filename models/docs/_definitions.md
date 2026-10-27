@@ -62,7 +62,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 每日流量的資料限制：
 - 起始日：YouTube 2025-06-28、FB 2025-08-01、IG 2025-08-01、IG Stories 2025-09-14、X 2025-12-29。更早的期間沒有每日流量。
 - **IG 於 2026-06-01 換算法**：之前是每支 reel 的 Total Plays 累計快照逐支相減（`source_method = reel_snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%；跨 6/1 比較 IG 趨勢時要說明。
-- IG 觀看時數所有期間都是逐支 reel 快照相減，已排除 API 漏抓 / 回傳 0 造成的負數（例如 2026-07 原報表出現大幅負數的觀看時數）。
+- IG 觀看時數與 IG 每日報表（`daily_ig_summary_report_new`）同一份數字：2026-10-25 前是人工校正過的歷史紀錄，2026-10-26 起逐支 reel 快照相減；沒有 API 漏抓 / 回傳 0 造成的負數（例如 2026-07 舊報表的時數曾出現大幅負數）。
 - IG 的 views 含影片類 Stories（`story_views` 另列）；YouTube / FB 含付費觀看（`paid_views` 另列）。
 - Connected 的 IG 停更後，舊貼文每天仍有觀看，所以每日流量不會是 0（影片層的新發布則是 0）。
 - TaiwanPlus Livestream 頻道的每日流量到 2026-08-05 為止。

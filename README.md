@@ -139,6 +139,8 @@ Dev builds go to a personal schema; prod routing is handled by [`macros/generate
 
 **Fix.** [`stg_daily__instagram_reel_deltas`](models/staging/stg_daily__instagram_reel_deltas.sql) computes each reel's delta against **its own** previous snapshot, takes cumulative values as a **running max** (so a missing or zero reading can't create a negative), and counts a new reel only if it was released within 3 days. When the IG API changed its method on 2026-06-01, the switch was recorded in a `source_method` column and documented as a caveat (the old method reads ~10–20% higher).
 
+On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in the BigQuery view `Instagram_data.ig_daily_watch_hours` (`TaiwanPlus_api/sql/ig_daily_watch_hours.sql`). It serves the team's daily IG report and dbt alike. Up to 2026-10-25 it returns the hand-corrected history from the team's Excel log (`ig_daily_watch_hours_history`), so dbt and the report show the same numbers. `assert_ig_watch_hours_matches_source` checks that monthly totals agree.
+
 **Result.** No negative days left. The non-negative test now covers views **and** watch hours with no exceptions, and normal months are unchanged.
 
 ### Decision 3 — Don't mistake a definition change for growth

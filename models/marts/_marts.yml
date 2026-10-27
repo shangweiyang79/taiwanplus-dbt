@@ -333,7 +333,7 @@ models:
       - name: engaged_views
         description: YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 views。
       - name: watch_time_hours
-        description: 當天的觀看時數。IG 為逐支 reel 快照相減（已排除 API 漏抓造成的負數）；FB 由分鐘換算；Stories 為 NULL。
+        description: 當天的觀看時數。IG 與 IG 每日報表同一份數字（2026-10-25 前為人工校正的歷史，之後逐支 reel 快照相減，沒有負數）；FB 由分鐘換算；Stories 為 NULL。
       - name: source_method
         description: >
           資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/

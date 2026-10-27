@@ -1,6 +1,6 @@
 # TaiwanPlus 新聞部社群成效：AI 查詢說明
 
-> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-16），**不要手改**。
+> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-27），**不要手改**。
 > 定義的來源是 dbt 專案：`models/docs/_definitions.md`、`models/marts/_marts.yml`、`seeds/`。
 > 資料庫是 BigQuery（專案 `${GCP_PROJECT}`，查詢時代換成實際的專案 ID；位置 asia-east1），SQL 一律用 GoogleSQL。
 
@@ -33,7 +33,7 @@
 每日流量的資料限制：
 - 起始日：YouTube 2025-06-28、FB 2025-08-01、IG 2025-08-01、IG Stories 2025-09-14、X 2025-12-29。更早的期間沒有每日流量。
 - **IG 於 2026-06-01 換算法**：之前是每支 reel 的 Total Plays 累計快照逐支相減（`source_method = reel_snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%；跨 6/1 比較 IG 趨勢時要說明。
-- IG 觀看時數所有期間都是逐支 reel 快照相減，已排除 API 漏抓 / 回傳 0 造成的負數（例如 2026-07 原報表出現大幅負數的觀看時數）。
+- IG 觀看時數與 IG 每日報表（`daily_ig_summary_report_new`）同一份數字：2026-10-25 前是人工校正過的歷史紀錄，2026-10-26 起逐支 reel 快照相減；沒有 API 漏抓 / 回傳 0 造成的負數（例如 2026-07 舊報表的時數曾出現大幅負數）。
 - IG 的 views 含影片類 Stories（`story_views` 另列）；YouTube / FB 含付費觀看（`paid_views` 另列）。
 - Connected 的 IG 停更後，舊貼文每天仍有觀看，所以每日流量不會是 0（影片層的新發布則是 0）。
 - TaiwanPlus Livestream 頻道的每日流量到 2026-08-05 為止。
@@ -159,7 +159,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `views` | 影片觀看數，各平台定義不同（見 §1）。 |
 | `paid_views` | 付費觀看（YouTube、FB、IG 有欄位；X 為 NULL）。 |
 | `engaged_views` | YouTube 的 Engaged views（輔助參考，其他平台為 NULL）。KPI 仍是 views。 |
-| `watch_time_hours` | 當天的觀看時數。IG 為逐支 reel 快照相減（已排除 API 漏抓造成的負數）；FB 由分鐘換算；Stories 為 NULL。 |
+| `watch_time_hours` | 當天的觀看時數。IG 與 IG 每日報表同一份數字（2026-10-25 前為人工校正的歷史，之後逐支 reel 快照相減，沒有負數）；FB 由分鐘換算；Stories 為 NULL。 |
 | `source_method` | 資料算法：youtube_analytics / facebook_insights / x_analytics / api（IG 2026-06-01 起）/ reel_snapshot_delta（IG 2026-06-01 前，逐支 reel 快照相減）/ story_by_publish_date（IG Stories）。 |
 
 ### `${GCP_PROJECT}.news_dept_social.agg_news_dept_social_monthly`

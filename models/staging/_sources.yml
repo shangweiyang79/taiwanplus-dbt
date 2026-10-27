@@ -71,16 +71,26 @@ sources:
       - name: daily_ig_summary_report
         description: >
           IG 每日流量（舊報表）：各帳號每天的 Total Plays 總和減去前一天。dbt 已不使用這張表
-          （API 漏抓時會產生大幅負數），改由 stg_daily__instagram_reel_deltas 逐支 reel 相減，正常月份結果與本表相同。
+          （API 漏抓時會產生大幅負數），觀看數改由 stg_daily__instagram_reel_deltas 逐支 reel 相減，正常月份結果與本表相同。
         config:
           freshness: null
       - name: daily_ig_summary_report_new
         description: >
           IG 每日流量（2026-06-01 起）：觀看來自官方 API（account_daily_insights）。
-          時數欄位是帳號總和相減、API 漏抓時會變負數，dbt 不使用，改用逐支 reel 相減。
+          時數欄位自 2026-10-27 起改讀 ig_daily_watch_hours，不再有負數；dbt 只取這張的觀看數，時數直接讀 ig_daily_watch_hours。
           News / Talks / Connected / Social(Program) 為欄；Program 不屬於新聞部。
+          定義見 TaiwanPlus_api/sql/daily_ig_summary_report_new.sql。
         config:
           loaded_at_field: "CAST(Date AS TIMESTAMP)"
+      - name: ig_daily_watch_hours
+        description: >
+          IG 每日觀看時數，一列 = 日 × 帳號（Social = Program / News / Connected / Talks），不會有負數。
+          2026-10-25 前讀 ig_daily_watch_hours_history（人工校正的 IG_daily_traffic.xlsx，ig_wh_history_bq.py 上傳，source_method = excel_history）；
+          2026-10-26 起逐支 reel 差分、累計值取歷史最大值（source_method = reel_delta）。
+          granularity = 'month' 的列（2024 年）是記在月底的整月總數，不能當單日用。
+          定義見 TaiwanPlus_api/sql/ig_daily_watch_hours.sql。
+        config:
+          loaded_at_field: "CAST(date AS TIMESTAMP)"
       - name: ig_stories_pivot_daily
         description: IG Stories 每日觀看（只含影片類 Stories），News / Talks / Connected / Social 為欄。
         config:
