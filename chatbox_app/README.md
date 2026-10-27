@@ -59,6 +59,7 @@ gcloud services enable iap.googleapis.com artifactregistry.googleapis.com cloudb
 gcloud artifacts repositories create data-chatbox --repository-format=docker --location=asia-east1
 gcloud beta services identity create --service=iap.googleapis.com
 
+# gcloud 預設的計費專案若不是本專案（會出現 Cloud Build API SERVICE_DISABLED），以下指令都加 --billing-project=<gcp-project>
 # 1. 建映像（先查目前的 tag，用下一號，不要覆寫舊號碼）
 gcloud run services describe data-chatbox --region=asia-east1 --format="value(spec.template.spec.containers[0].image)"
 gcloud builds submit --tag asia-east1-docker.pkg.dev/<gcp-project>/data-chatbox/app:vN

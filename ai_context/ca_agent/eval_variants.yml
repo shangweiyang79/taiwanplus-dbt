@@ -32,3 +32,6 @@ variants:
   q10_may_overall:
     paraphrase: 幫我看一下新聞部今年五月的社群總體表現
     en: How did the news department perform overall in May 2026?
+  q11_newsroom_ig_watch_hours:
+    paraphrase: 新聞台 IG 最近幾個月時數有變多嗎？
+    en: Has Newsroom's Instagram watch time grown recently?

@@ -73,6 +73,36 @@ def _events(sm):
             yield "data", {"rows": [], "sql": sql}
     elif kind == "chart":
         if sm.chart.result.vega_config:
-            yield "chart", type(sm.chart.result).to_dict(sm.chart.result)["vega_config"]
+            yield "chart", fix_month_axis(type(sm.chart.result).to_dict(sm.chart.result)["vega_config"])
     elif kind == "error":
         yield "error", sm.error.text
+
+
+_MONTH_FIELDS = {"year_month", "month_start"}
+
+
+def fix_month_axis(spec):
+    """月資料被畫成連續時間軸時，Vega-Lite 會用週當刻度（Jul 05、Jul 12…），改成一個月一格。
+
+    agent 有時把 year_month / month_start 標成 temporal，有時標成 nominal；只修 temporal 的。
+    用 utcyearmonth：'2026-07'、'2026-07-01' 這類字串會被解析成 UTC 午夜，
+    用本地時區的話，UTC 以西的瀏覽器會顯示成前一個月。
+    """
+    if isinstance(spec, list):
+        for item in spec:
+            fix_month_axis(item)
+    elif isinstance(spec, dict):
+        for channel, enc in (spec.get("encoding") or {}).items():
+            for e in enc if isinstance(enc, list) else [enc]:
+                if isinstance(e, dict) and e.get("type") == "temporal" and e.get("field") in _MONTH_FIELDS:
+                    e["timeUnit"] = "utcyearmonth"
+                    if channel in ("x", "y"):
+                        e["type"] = "ordinal"
+                        e.setdefault("title", "月份")  # 不給的話預設標題會多出「(year-month)」
+                        e["axis"] = {**(e.get("axis") or {}), "format": "%Y-%m", "formatType": "time", "labelAngle": 0}
+                    else:
+                        e["format"] = "%Y-%m"
+        for key, value in spec.items():
+            if key != "encoding":
+                fix_month_axis(value)
+    return spec

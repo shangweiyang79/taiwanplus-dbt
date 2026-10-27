@@ -50,6 +50,8 @@ GLOSSARY = [
      ["成效", "表現", "performance", "總體成效"]),
     ("觀看數", "影片觀看數 views；各平台門檻不同（YouTube 2026-08-27 起約 1 秒、IG 約 0.3～0.5 秒、X 連續 2 秒、FB 3 秒）。",
      ["views", "觀看", "播放數", "plays"]),
+    ("觀看時數", "欄位 watch_time_hours（小時），和觀看數 views 是不同指標；問時數時要選 watch_time_hours，不能用 views 回答。X 沒有觀看時數。",
+     ["時數", "觀看時長", "觀看時間", "watch time", "watch hours", "WH"]),
     ("每日流量", "期間內實際發生的觀看（依觀看日），用於總體成效 KPI。表：agg_news_dept_daily_traffic_monthly、fct_daily_traffic。",
      ["daily traffic", "實際觀看"]),
     ("影片層", "期間內發布的影片到今天的累計觀看（依發布日），用於原因分析與影片排行。表：fct_social_post_performance、agg_news_dept_social_monthly。",

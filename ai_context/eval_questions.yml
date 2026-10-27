@@ -238,3 +238,26 @@ questions:
       FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE year_month = '2026-05'
       ORDER BY dept_scope, platform
+
+  - id: q11_newsroom_ig_watch_hours
+    question: Newsroom IG 近期的觀看時數有成長嗎？
+    expected:
+      layer: 每日流量
+      scope: newsroom
+      metric: watch_time_hours（不是 views）
+      period: 最近三個完整月份
+    must_mention:
+      - 回答的是觀看時數（watch_time_hours），不是觀看數
+      - 用各月時數的變化回答有沒有成長
+    must_not:
+      - 用 views 回答時數問題
+      - 說查不到 / 沒有觀看時數欄位
+    reference_sql: |
+      SELECT year_month, watch_time_hours, views, days_with_data,
+             SAFE_DIVIDE(watch_time_hours - LAG(watch_time_hours) OVER (ORDER BY month_start),
+                         LAG(watch_time_hours) OVER (ORDER BY month_start)) AS watch_time_mom_growth
+      FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
+      WHERE dept_scope = 'newsroom' AND platform = 'Instagram'
+        AND month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
+        AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
+      ORDER BY year_month
