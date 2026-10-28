@@ -1,0 +1,133 @@
+# YouTube owner 報表的事件驅動鏈（Cloud Workflows: youtube-owner-chain）
+#
+#   owner transfer 每次執行結束 → Pub/Sub 通知 → Eventarc → 這個 workflow
+#     1. 判斷 owner 表是否比衍生表新；沒有新資料就結束（大部分 09:30 的排程執行都會停在這裡）
+#     2. MERGE daily_detailed_summary
+#     3. 同時重建 video_news_livestream、video_news_broad
+#     4. 跑 dbt 每日檢查（Cloud Run Job dbt-daily-checks），等它跑完
+#   任何一步失敗 → workflow 執行失敗 → Cloud Monitoring 寄信。
+#
+# 為什麼不用固定時間：報表日 D 的資料第一次進來落在 D+2 的 13:37–23:51 之間，
+# 之後還會被修正重寫，用時間猜一定會漏。SQL 在 orchestration/sql/，以 stored procedure 部署。
+#
+# 手動執行（不帶事件）：gcloud workflows run youtube-owner-chain --location=asia-east1 --data='{}'
+# 不管有沒有新資料都重建：--data='{"force": true}'
+main:
+  params: [event]
+  steps:
+    - init:
+        assign:
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - location: asia-east1
+          - trigger: "manual"
+          - force: ${default(map.get(event, "force"), false)}
+    - parse_event:
+        # transfer 的通知內容是 TransferRun JSON；手動執行時沒有，就記為 manual
+        try:
+          assign:
+            - run: ${json.decode(base64.decode(event.data.message.data))}
+            - trigger: ${"transfer run " + run.state + ", runTime " + run.runTime}
+        except:
+          as: e
+          steps:
+            - keep_manual:
+                assign:
+                  - trigger: "manual"
+    - log_trigger:
+        call: sys.log
+        args:
+          text: ${"觸發：" + trigger}
+
+    - check_new_data:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project}
+          body:
+            useLegacySql: false
+            location: ${location}
+            query: |
+              SELECT
+                (SELECT MAX(last_modified_time) FROM `youtube_taiwanplus_owner.__TABLES__`
+                 WHERE table_id IN ('p_content_owner_basic_a4_owner', 'p_content_owner_reach_basic_a1_owner',
+                                    'p_content_owner_video_metadata_a4_owner', 'p_content_owner_traffic_source_a3_owner'))
+                >
+                (SELECT MIN(last_modified_time) FROM `youtube_channel_summary.__TABLES__`
+                 WHERE table_id IN ('daily_detailed_summary', 'video_news_livestream', 'video_news_broad'))
+                AS has_new_data
+        result: check
+    - stop_if_no_new_data:
+        switch:
+          - condition: ${not force and check.rows[0].f[0].v != "true"}
+            steps:
+              - log_skip:
+                  call: sys.log
+                  args:
+                    text: "owner 表沒有比衍生表新的資料，結束"
+              - skip:
+                  return: "skipped: no new owner data"
+
+    # 2. 先 MERGE 每日彙總，再同時重建兩張影片表
+    - refresh_daily_summary:
+        call: bq_call
+        args:
+          project: ${project}
+          location: ${location}
+          procedure: refresh_daily_detailed_summary
+    - refresh_video_tables:
+        parallel:
+          branches:
+            - livestream:
+                steps:
+                  - call_livestream:
+                      call: bq_call
+                      args:
+                        project: ${project}
+                        location: ${location}
+                        procedure: refresh_video_news_livestream
+            - broad:
+                steps:
+                  - call_broad:
+                      call: bq_call
+                      args:
+                        project: ${project}
+                        location: ${location}
+                        procedure: refresh_video_news_broad
+
+    # 4. 衍生表更新完才跑 dbt 檢查；connector 會等 job 執行結束，
+    #    回傳的是 long-running operation，Execution 在 response 底下
+    - run_dbt_checks:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${"projects/" + project + "/locations/" + location + "/jobs/dbt-daily-checks"}
+        result: op
+    - check_dbt_result:
+        switch:
+          - condition: ${"error" in op or default(map.get(op, ["response", "failedCount"]), 0) > 0}
+            raise: ${"dbt-daily-checks 失敗：" + json.encode_to_string(op)}
+    - done:
+        return: ${"refreshed; dbt checks passed (" + op.response.name + ")"}
+
+# 呼叫一個 stored procedure，等 job 結束；job 失敗就讓整個 workflow 失敗
+bq_call:
+  params: [project, location, procedure]
+  steps:
+    - insert_job:
+        call: googleapis.bigquery.v2.jobs.insert
+        args:
+          projectId: ${project}
+          body:
+            jobReference:
+              location: ${location}
+            configuration:
+              query:
+                useLegacySql: false
+                query: ${"CALL `youtube_channel_summary." + procedure + "`()"}
+        result: job
+    - check_job:
+        switch:
+          - condition: ${"errorResult" in job.status}
+            raise: ${procedure + " 失敗：" + json.encode_to_string(job.status.errorResult)}
+    - log_done:
+        call: sys.log
+        args:
+          text: ${procedure + " 完成（job " + job.jobReference.jobId + "）"}

@@ -2,7 +2,7 @@ target/
 dbt_packages/
 logs/
 .user.yml
-profiles.yml
+/profiles.yml
 *.keyfile.json
 service_account*.json
 .env
@@ -20,3 +20,4 @@ ai_context/ca_agent/agent_config.yaml
 ai_context/ca_agent/eval_results/*.md
 !ai_context/ca_agent/eval_results/SUMMARY.md
 analyses/forecast_backtest_results.csv
+target_kc/

@@ -197,6 +197,9 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 
 - **Source freshness:** thresholds are tuned per source to how it is actually loaded. For example, weekly loads warn after 8 days and error after 14; the YouTube owner report has a known reporting lag, so it was relaxed to 7/10 days based on observed latency. A retired account (Connected IG) is excluded from freshness checks on purpose.
 - **Documentation as data:** `persist_docs` writes every model and column description into BigQuery, so BigQuery's own Gemini features read the same definitions as humans do.
+- **Daily checks in prod:** Cloud Scheduler triggers a Cloud Run Job every day after ingestion. The job runs `dbt source freshness` and `dbt test` against prod and emails an alert if either fails. All models are views, so the data is always current and nothing needs a daily rebuild. What changes day to day is the data itself, so the job only checks it. It runs as a **read-only** service account and cannot modify prod.
+- **Event-driven upstream refresh:** the YouTube content-owner reports have no fixed "done" time. Day D first lands on D+2 at any time between 13:37 and 23:51, then gets corrected again later. Fixed-time scheduled queries were therefore always a step behind. Now each transfer run publishes a Pub/Sub notification. Eventarc starts a Cloud Workflow, which checks whether the owner tables are newer than the derived tables. Only when they are does it refresh the derived YouTube tables (SQL versioned as stored procedures in [`orchestration/sql/`](orchestration/sql/)) and then run the dbt checks. The newest YouTube day now reaches the models about a day earlier.
+- **CI:** GitHub Actions builds the whole project into an isolated `dbt_ci` dataset on every PR and runs every test, plus the chatbox unit tests. It authenticates through **Workload Identity Federation**, so no service account key exists anywhere. Details: [`orchestration/README.md`](orchestration/README.md).
 
 ---
 
@@ -250,6 +253,9 @@ No model wins everywhere, and viral-driven series (Talks) aren't forecastable at
 | [`ai_context/`](ai_context/) | Generated AI context, eval question bank, CA agent build/deploy/eval, Claude skill |
 | [`chatbox_app/`](chatbox_app/) | Streamlit chatbox (Dockerfile, CA client, narrator, caveat notes, tests) |
 | [`analyses/`](analyses/) | Forecast backtest results |
+| [`orchestration/`](orchestration/) | Daily prod checks (Cloud Run Job + Scheduler + alert) and GCP setup for CI |
+| [`.github/workflows/`](.github/workflows/) | CI: dbt build + tests into `dbt_ci`, chatbox unit tests |
+| [`profiles/`](profiles/) | Env-driven dbt profile for CI and the daily job (no keys, no project ID) |
 
 ---
 
@@ -289,7 +295,7 @@ python scripts/run_eval_reference.py    # reference answers for the eval questio
 
 ## 8. Tech stack
 
-`dbt` (BigQuery adapter, `persist_docs`, semantic layer YAML spec) · `BigQuery` · `BigQuery ML` (ARIMA_PLUS, TimesFM) · `Python` (`google-cloud-bigquery`) · `Conversational Analytics API` (Data Agent) · `Gemini Flash` · `Streamlit` · `Cloud Run` · `Identity-Aware Proxy` · `Artifact Registry` / `Cloud Build` · `Cloud Logging` · `Looker Studio`
+`dbt` (BigQuery adapter, `persist_docs`, semantic layer YAML spec) · `BigQuery` · `BigQuery ML` (ARIMA_PLUS, TimesFM) · `Python` (`google-cloud-bigquery`) · `Conversational Analytics API` (Data Agent) · `Gemini Flash` · `Streamlit` · `Cloud Run` · `Identity-Aware Proxy` · `Artifact Registry` / `Cloud Build` · `Cloud Logging` · `Looker Studio` · `GitHub Actions` · `Workload Identity Federation` · `Cloud Scheduler` · `Cloud Monitoring`
 
 ---
 
@@ -302,7 +308,7 @@ The TaiwanPlus data is **proprietary and not included**. This repo contains only
 ## 10. Future directions
 
 - **Materialize hot marts** as tables or incremental models. Everything is a view today, so one chatbox question scans ~0.1–1.6 GB.
-- **CI/CD:** GitHub Actions with slim CI (`dbt build --select state:modified+`) and freshness checks on a schedule.
+- **CD:** deploy to prod automatically on merge to `main` (CI and scheduled checks are in place; deploys are still manual). Add slim CI (`state:modified+` with `--defer`) once full CI builds get slow.
 - **Snapshots** for slowly changing mappings (account ownership, channel → unit).
 - **Query the semantic layer directly** (dbt platform) instead of compiling metrics into an AI context file.
 - **Shorts detection for Talks / Connected**, which the upstream Shorts list doesn't cover yet.
