@@ -1,0 +1,31 @@
+{
+  "displayName": "youtube-owner-chain failed",
+  "documentation": {
+    "content": "YouTube owner 事件驅動鏈（Workflow youtube-owner-chain）執行失敗。到 Workflows → youtube-owner-chain → Executions 打開失敗的那次，看是哪一步出錯。處理方式見 orchestration/README.md。",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Workflow execution failed",
+      "conditionThreshold": {
+        "filter": "resource.type = \"workflows.googleapis.com/Workflow\" AND resource.labels.workflow_id = \"youtube-owner-chain\" AND metric.type = \"workflows.googleapis.com/finished_execution_count\" AND metric.labels.status = \"FAILED\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  }
+}

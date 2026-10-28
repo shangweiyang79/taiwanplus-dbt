@@ -20,6 +20,41 @@ flowchart LR
     end
 ```
 
+## YouTube owner 事件驅動鏈
+
+YouTube 內容擁有者報表（BQ Data Transfer）沒有固定的「跑完」時間：每天 09:30 的排程執行通常沒有新資料，報表日 D 的資料第一次進來落在 **D+2 的 13:37–23:51**（2026-10 觀察 11 天），之後 D+3 上午還會再被修正重寫。原本三個 BQ 排程查詢用固定時間（09:30 / 09:50 / 13:00）去猜，結果每天都比資料早到一步，最新一天要等到隔天才進衍生表；`daily_detailed_summary` 甚至在報表進來前就跑完。
+
+改成由事件觸發：
+
+```mermaid
+flowchart LR
+    DTS["owner transfer<br/>每次執行結束"] -->|Pub/Sub 通知| EA["Eventarc"] --> WF["Workflow<br/>youtube-owner-chain<br/>SA: yt-chain"]
+    WF --> Q{"owner 表比<br/>衍生表新?"}
+    Q -->|否| END["結束"]
+    Q -->|是| S1["daily_detailed_summary<br/>MERGE"] --> S2["video_news_livestream<br/>video_news_broad<br/>同時重建"] --> DBT["dbt-daily-checks"]
+    WF -->|執行失敗| MON["Cloud Monitoring 寄信"]
+```
+
+- **判斷有沒有新資料**：比 `__TABLES__.last_modified_time`，不需要另存狀態；同一份資料重複通知也只會重建一次。
+- **SQL** 在 [`sql/`](sql/)，部署成 `youtube_channel_summary` 裡的 stored procedure（`refresh_*`），內容與原排程查詢逐字相同（只拿掉寫死的專案 ID）。需要時可手動重跑：`CALL youtube_channel_summary.refresh_video_news_broad();`
+- **執行身分** `yt-chain`：只讀 `youtube_taiwanplus_owner`、只寫 `youtube_channel_summary`，取代原本用個人帳號執行的排程查詢。
+- 12:00 的每日檢查保留，負責 10:25 前就到齊的 IG / FB；YouTube 由這條鏈在最後觸發檢查。
+
+上線與回滾：
+
+```bash
+P="--project=<gcp-project> --billing-project=<gcp-project>"
+# 1. 建立 SA、procedure、Pub/Sub 通知、workflow、Eventarc、告警
+GCP_PROJECT=<gcp-project> ALERT_EMAIL=<you@example.com> bash orchestration/setup_youtube_chain.sh
+# 2. 手動跑一次，確認三張表更新、dbt 檢查通過
+gcloud workflows run youtube-owner-chain --location=asia-east1 --data='{}' $P
+# 3. 停用被取代的三個排程查詢（只設 disabled，不刪除）
+GCP_PROJECT=<gcp-project> bash orchestration/toggle_old_schedules.sh disable
+# 回滾：恢復排程查詢，再刪掉 Eventarc trigger 讓鏈停止
+GCP_PROJECT=<gcp-project> bash orchestration/toggle_old_schedules.sh enable
+gcloud eventarc triggers delete youtube-owner-transfer-finished --location=asia-east1 $P
+```
+
 ## 為什麼每天只檢查、不重建
 
 所有 model 都是 view，查詢時才讀原始表，所以 ingestion 一寫入，Looker 和 chatbox 就看得到新資料，不需要每天 `dbt build`。重建只在程式碼改動時才需要，也就是部署；部署目前仍由人手動執行 `dbt build --target prod`。
