@@ -1,0 +1,2 @@
+# shell 腳本在 Linux 容器（Cloud Run Job）裡執行，CRLF 會讓 bash 報錯
+*.sh text eol=lf
