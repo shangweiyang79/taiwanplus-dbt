@@ -1,0 +1,18 @@
+# 根目錄 Dockerfile（每日檢查 job）只需要 dbt 專案本身
+.git
+.github/
+.venv/
+**/__pycache__/
+.env
+*.keyfile.json
+service_account*.json
+/profiles.yml
+target/
+target_kc/
+logs/
+dbt_packages/
+dbt_internal_packages/
+chatbox_app/
+ai_context/
+scripts/
+analyses/*.csv

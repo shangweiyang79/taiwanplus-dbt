@@ -1,0 +1,31 @@
+{
+  "displayName": "dbt-daily-checks failed",
+  "documentation": {
+    "content": "每日 dbt 檢查（source freshness / test）失敗。到 Cloud Run → Jobs → dbt-daily-checks 打開這次執行的 log，往上找 ERROR / FAIL 看是哪個 source 或 test。處理方式見 orchestration/README.md。",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Cloud Run job execution failed",
+      "conditionThreshold": {
+        "filter": "resource.type = \"cloud_run_job\" AND resource.labels.job_name = \"dbt-daily-checks\" AND metric.type = \"run.googleapis.com/job/completed_execution_count\" AND metric.labels.result = \"failed\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  }
+}

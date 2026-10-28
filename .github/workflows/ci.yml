@@ -1,0 +1,63 @@
+# CI：每個 PR（以及 main 的每次 push）自動驗證。綠燈才合併進 main。
+#   chatbox-tests  chatbox 的規則與 CA client 單元測試，不需要 GCP
+#   dbt-build      整個專案建進 dbt_ci dataset 並跑全部 test，不碰 dev / prod
+#
+# GCP 認證走 Workload Identity Federation：GitHub 簽發的 OIDC token 換成 dbt-ci SA 的短期憑證，
+# repo 與 secrets 裡都沒有 SA 金鑰。設定方式見 orchestration/README.md。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chatbox-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chatbox_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: chatbox_app/requirements.txt
+      - run: pip install -r requirements.txt
+      # 與 chatbox_app/Dockerfile 的 build 檢查相同；import 只需要一個專案 ID 字串
+      - run: python test_notes.py && python test_ca_client.py && python -c "import ca_client, notes, config, narrator"
+        env:
+          GCP_PROJECT: build-check
+
+  dbt-build:
+    # fork 來的 PR 拿不到 OIDC token 與 secrets，直接跳過
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # 讓 google-github-actions/auth 取得 OIDC token
+    # 所有執行共用同一個 dbt_ci dataset，一次只跑一個，避免互相覆蓋
+    concurrency:
+      group: dbt-ci
+      cancel-in-progress: false
+    env:
+      DBT_PROFILES_DIR: profiles
+      DBT_ENGINE_NO_WARN_SEMANTIC_MANIFEST_VALIDATION: "1"   # semantic layer 驗證要 dbt platform，本機與 CI 都跳過
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # 與本機、每日檢查 job 同一版
+      - run: pip install dbt==2.0.9
+      - run: dbt build --target ci

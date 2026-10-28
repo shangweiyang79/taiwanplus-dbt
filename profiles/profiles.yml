@@ -1,0 +1,33 @@
+# 給機器用的 profile：CI（GitHub Actions）與每日檢查（Cloud Run Job）。
+# 本機開發仍用 ~/.dbt/profiles.yml；要用這份時設 DBT_PROFILES_DIR=profiles。
+#
+# 認證一律走 ADC（method: oauth），repo 裡不放任何金鑰：
+#   CI              Workload Identity Federation 換成 dbt-ci SA 的短期憑證
+#   Cloud Run Job   直接用執行身分 dbt-runner SA（唯讀）
+# repo 是公開的，專案 ID 由環境變數 GCP_PROJECT 提供。
+taiwanplus_dbt:
+  target: ci
+  outputs:
+    # CI：整個專案建進單一 dataset（generate_schema_name 只有 prod 才分 dataset），
+    # 不碰 dev 也不碰 prod。
+    ci:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT') }}"
+      dataset: "{{ env_var('DBT_CI_DATASET', 'dbt_ci') }}"
+      location: asia-east1
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+    # 每日檢查只對 prod 跑 source freshness 與 test，不建任何 model。
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT') }}"
+      dataset: dbt_internal
+      location: asia-east1
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 300
+      job_retries: 1
