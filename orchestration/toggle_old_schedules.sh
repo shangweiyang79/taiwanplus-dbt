@@ -23,7 +23,7 @@ want = set('$NAMES'.split())
 for c in json.load(sys.stdin).get('transferConfigs', []):
     if c['displayName'] in want:
         print(c['name'], c['displayName'])
-" | while read -r name display; do
+" | tr -d '\r' | while read -r name display; do  # Windows 的 Python 輸出 CRLF
   curl -sf -X PATCH "${H[@]}" -H "Content-Type: application/json" -d "{\"disabled\": $DISABLED}" \
     "$API/$name?updateMask=disabled" >/dev/null
   echo "$display → disabled=$DISABLED"
