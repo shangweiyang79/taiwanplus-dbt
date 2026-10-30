@@ -2,7 +2,7 @@
 
 > A **dbt transformation layer** that brings **4 social platforms** (YouTube / Instagram / Facebook / X) × **3 newsroom units** into one tested, documented model on BigQuery. It **replaced 13 legacy BigQuery views without rewiring a single Looker Studio dashboard**, and the same definitions feed a **read-only LLM data chatbox** that passes **20/20** golden eval questions.
 
-![dbt](https://img.shields.io/badge/dbt-2.x-FF694B?logo=dbt&logoColor=white) ![BigQuery](https://img.shields.io/badge/BigQuery-asia--east1-669DF6?logo=googlebigquery&logoColor=white) ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white) ![Cloud Run](https://img.shields.io/badge/Cloud%20Run-IAP-4285F4?logo=googlecloud&logoColor=white) ![Gemini](https://img.shields.io/badge/Gemini-Conversational%20Analytics-8E75B2)
+[![CI/CD](https://github.com/shangweiyang79/taiwanplus-dbt/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/shangweiyang79/taiwanplus-dbt/actions/workflows/ci.yml) ![dbt](https://img.shields.io/badge/dbt-2.x-FF694B?logo=dbt&logoColor=white) ![BigQuery](https://img.shields.io/badge/BigQuery-asia--east1-669DF6?logo=googlebigquery&logoColor=white) ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white) ![Cloud Run](https://img.shields.io/badge/Cloud%20Run-IAP-4285F4?logo=googlecloud&logoColor=white) ![Gemini](https://img.shields.io/badge/Gemini-Conversational%20Analytics-8E75B2)
 
 ```mermaid
 flowchart TB
@@ -52,6 +52,7 @@ flowchart TB
 - **Resolved a metric ambiguity.** "Views" meant two different things in different reports. I split it into **daily traffic** (the KPI: views that *happened* in the period) and **video level** (for root cause: *cumulative* views by publish date). For the same unit and month, the two can differ by **~2×**, which is why the reports used to disagree.
 - **Fixed silent data bugs.** Summing the raw Instagram snapshot table **inflates views 100×+**. The account-level daily deltas also **went negative** whenever the API dropped reels (at one point more than half of an account's reels vanished from the feed in a single day). Per-reel snapshot deltas with a running max fixed it: one month's watch time went from a **six-figure negative** number to the correct positive value.
 - **Tested and documented.** **39 tests** (30 generic + 9 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
+- **Automated, keyless operations.** Every PR is built and tested in an isolated dataset; merging to `main` deploys prod with no manual step. Daily checks run freshness and every test against prod, and an event-driven Workflow refreshes YouTube data as soon as it lands instead of guessing a schedule. All of it runs on per-job least-privilege service accounts through Workload Identity Federation, with no keys ([§4](#4-data-quality--testing)).
 - **Semantic layer → AI.** 2 semantic models, 17 metrics and 2 saved queries are compiled into an AI context file. A Conversational Analytics agent plus a Streamlit chatbox (Cloud Run behind IAP, **verified read-only** service account) passes **20/20** eval questions (10 questions × original/paraphrase) with a **median latency of 20.4 s**. A number checker flags any figure in the answer that is not in the query result.
 - **Honest forecasting backtest.** Multi-cutoff backtest of **TimesFM vs ARIMA_PLUS vs naive**: TimesFM wins on X (**11%** 28-day error vs 21% naive), but **naive beats it on Newsroom YouTube** (18% vs 27%). So forecasts are used as a reference in the biweekly report, never as a KPI.
 
@@ -199,7 +200,9 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 - **Documentation as data:** `persist_docs` writes every model and column description into BigQuery, so BigQuery's own Gemini features read the same definitions as humans do.
 - **Daily checks in prod:** Cloud Scheduler triggers a Cloud Run Job every day after ingestion. The job runs `dbt source freshness` and `dbt test` against prod and emails an alert if either fails. All models are views, so the data is always current and nothing needs a daily rebuild. What changes day to day is the data itself, so the job only checks it. It runs as a **read-only** service account and cannot modify prod.
 - **Event-driven upstream refresh:** the YouTube content-owner reports have no fixed "done" time. Day D first lands on D+2 at any time between 13:37 and 23:51, then gets corrected again later. Fixed-time scheduled queries were therefore always a step behind. Now each transfer run publishes a Pub/Sub notification. Eventarc starts a Cloud Workflow, which checks whether the owner tables are newer than the derived tables. Only when they are does it refresh the derived YouTube tables (SQL versioned as stored procedures in [`orchestration/sql/`](orchestration/sql/)) and then run the dbt checks. The newest YouTube day now reaches the models about a day earlier.
-- **CI:** GitHub Actions builds the whole project into an isolated `dbt_ci` dataset on every PR and runs every test, plus the chatbox unit tests. It authenticates through **Workload Identity Federation**, so no service account key exists anywhere. Details: [`orchestration/README.md`](orchestration/README.md).
+- **CI:** GitHub Actions builds the whole project into an isolated `dbt_ci` dataset on every PR and runs every test, plus the chatbox unit tests.
+- **CD:** merging to `main` deploys everything with no manual step: `dbt build --target prod`, the YouTube stored procedures and Workflow, and the daily-checks image (tagged with the commit SHA). The image is swapped only after the prod build succeeds, so new tests never run against views that have not been rebuilt yet. Every deploy pushes the whole of `main` and is idempotent, so manual drift in the console is reverted on the next merge.
+- **No keys, least privilege:** CI/CD authenticates through **Workload Identity Federation**, so no service account key exists anywhere. Each job runs as its own service account: the prod build can write only the three dbt datasets, the infra deployer can touch only the one Cloud Run Job, the Workflow and the YouTube summary dataset. Deploy identities are bound to the `main` branch's OIDC subject (GitHub's immutable form, with numeric owner and repo IDs), so PRs, other branches and forks cannot obtain them. Details: [`orchestration/README.md`](orchestration/README.md).
 
 ---
 
@@ -253,8 +256,8 @@ No model wins everywhere, and viral-driven series (Talks) aren't forecastable at
 | [`ai_context/`](ai_context/) | Generated AI context, eval question bank, CA agent build/deploy/eval, Claude skill |
 | [`chatbox_app/`](chatbox_app/) | Streamlit chatbox (Dockerfile, CA client, narrator, caveat notes, tests) |
 | [`analyses/`](analyses/) | Forecast backtest results |
-| [`orchestration/`](orchestration/) | Daily prod checks (Cloud Run Job + Scheduler + alert) and GCP setup for CI |
-| [`.github/workflows/`](.github/workflows/) | CI: dbt build + tests into `dbt_ci`, chatbox unit tests |
+| [`orchestration/`](orchestration/) | Daily prod checks (Cloud Run Job + Scheduler + alert), the event-driven YouTube refresh (Workflow + stored procedures), and GCP setup for CI/CD |
+| [`.github/workflows/`](.github/workflows/) | CI (dbt build + tests into `dbt_ci`, chatbox unit tests) and CD (prod build, Workflow, procedures, daily-checks image) |
 | [`profiles/`](profiles/) | Env-driven dbt profile for CI and the daily job (no keys, no project ID) |
 
 ---
@@ -279,7 +282,7 @@ dbt debug
 # 3. Build + test (run after the weekly E/L jobs)
 dbt source freshness
 dbt build                    # dev
-dbt build --target prod      # deploy
+dbt build --target prod      # deploy (normally done by CD on merge to main)
 
 # 4. Prove the compat layer matches the legacy views
 python scripts/reconcile_social_hub.py --new <dev_dataset> --old social_hub
@@ -295,7 +298,7 @@ python scripts/run_eval_reference.py    # reference answers for the eval questio
 
 ## 8. Tech stack
 
-`dbt` (BigQuery adapter, `persist_docs`, semantic layer YAML spec) · `BigQuery` · `BigQuery ML` (ARIMA_PLUS, TimesFM) · `Python` (`google-cloud-bigquery`) · `Conversational Analytics API` (Data Agent) · `Gemini Flash` · `Streamlit` · `Cloud Run` · `Identity-Aware Proxy` · `Artifact Registry` / `Cloud Build` · `Cloud Logging` · `Looker Studio` · `GitHub Actions` · `Workload Identity Federation` · `Cloud Scheduler` · `Cloud Monitoring`
+`dbt` (BigQuery adapter, `persist_docs`, semantic layer YAML spec) · `BigQuery` · `BigQuery ML` (ARIMA_PLUS, TimesFM) · `Python` (`google-cloud-bigquery`) · `Conversational Analytics API` (Data Agent) · `Gemini Flash` · `Streamlit` · `Cloud Run` · `Identity-Aware Proxy` · `Artifact Registry` / `Cloud Build` · `Cloud Logging` · `Looker Studio` · `GitHub Actions` · `Workload Identity Federation` · `Docker` · `Cloud Scheduler` · `Cloud Workflows` · `Eventarc` · `Pub/Sub` · `Cloud Monitoring`
 
 ---
 
@@ -308,7 +311,7 @@ The TaiwanPlus data is **proprietary and not included**. This repo contains only
 ## 10. Future directions
 
 - **Materialize hot marts** as tables or incremental models. Everything is a view today, so one chatbox question scans ~0.1–1.6 GB.
-- **CD:** deploy to prod automatically on merge to `main` (CI and scheduled checks are in place; deploys are still manual). Add slim CI (`state:modified+` with `--defer`) once full CI builds get slow.
+- **Slim CI/CD** (`state:modified+` with `--defer`) once full builds get slow. Today a full build takes about a minute, so it is not worth maintaining a prod manifest yet.
 - **Snapshots** for slowly changing mappings (account ownership, channel → unit).
 - **Query the semantic layer directly** (dbt platform) instead of compiling metrics into an AI context file.
 - **Shorts detection for Talks / Connected**, which the upstream Shorts list doesn't cover yet.
