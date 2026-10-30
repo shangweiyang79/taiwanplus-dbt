@@ -1,9 +1,12 @@
 # CI：每個 PR（以及 main 的每次 push）自動驗證。綠燈才合併進 main。
 #   chatbox-tests  chatbox 的規則與 CA client 單元測試，不需要 GCP
 #   dbt-build      整個專案建進 dbt_ci dataset 並跑全部 test，不碰 dev / prod
+# CD：只在 main 上、上面兩個 job 都綠燈後執行。
+#   deploy         dbt-daily-checks 映像、refresh_* stored procedure、workflow youtube-owner-chain
+#                  dbt 的 prod model 不在這裡，仍手動 dbt build --target prod
 #
-# GCP 認證走 Workload Identity Federation：GitHub 簽發的 OIDC token 換成 dbt-ci SA 的短期憑證，
-# repo 與 secrets 裡都沒有 SA 金鑰。設定方式見 orchestration/README.md。
+# GCP 認證走 Workload Identity Federation：GitHub 簽發的 OIDC token 換成 dbt-ci / dbt-deployer SA 的
+# 短期憑證，repo 與 secrets 裡都沒有 SA 金鑰。設定方式見 orchestration/README.md。
 name: CI
 
 on:
@@ -61,3 +64,47 @@ jobs:
       # 與本機、每日檢查 job 同一版
       - run: pip install dbt==2.0.9
       - run: dbt build --target ci
+
+  deploy:
+    needs: [chatbox-tests, dbt-build]
+    # 只部署 main；WIF 也只讓 main 換成 dbt-deployer，兩邊都擋
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    # 連續合併時依序部署，不中斷正在跑的部署
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    env:
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      REGION: asia-east1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      # 三步都可重複執行：每次合併都把 main 的版本整套推上去，手動改過的設定也會被拉回來
+      # 先換 procedure，workflow 才不會呼叫到還不存在的 procedure
+      - name: refresh_* stored procedures
+        run: |
+          for f in orchestration/sql/*.sql; do
+            bq --project_id="$GCP_PROJECT" --location="$REGION" query --use_legacy_sql=false --quiet < "$f" >/dev/null
+            echo "$(basename "$f" .sql)"
+          done
+      # 映像用 commit SHA 當 tag，從 job 的設定就查得到跑的是哪一版
+      - name: dbt-daily-checks 映像
+        run: |
+          IMAGE="$REGION-docker.pkg.dev/$GCP_PROJECT/cloud-run-source-deploy/dbt-daily-checks:$GITHUB_SHA"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          gcloud run jobs update dbt-daily-checks --image="$IMAGE" --region="$REGION" --project="$GCP_PROJECT"
+      - name: workflow youtube-owner-chain
+        run: |
+          gcloud workflows deploy youtube-owner-chain --source=orchestration/youtube_owner_chain.yaml \
+            --location="$REGION" --service-account="yt-chain@$GCP_PROJECT.iam.gserviceaccount.com" \
+            --project="$GCP_PROJECT"
