@@ -9,7 +9,7 @@
 #   dbt-deployer SA  GitHub Actions 的 deploy job 用。只能做這三件部署：
 #     1. 推 dbt-daily-checks 映像、更新 job 用的映像
 #     2. 部署 workflow youtube-owner-chain
-#     3. 重建 youtube_channel_summary 裡的 refresh_* stored procedure
+#     3. 重建 youtube_channel_summary 裡的 refresh_* stored procedure（也要讀 youtube_taiwanplus_owner，建立時要驗證）
 #   不能動 dbt 的 prod dataset（dbt build --target prod 仍是手動，之後加人工核准再交給 CD）。
 #
 # WIF 只讓 main 分支的 workflow 換成這個 SA：PR、其他分支、fork 都拿不到部署權限。
@@ -57,6 +57,10 @@ gcloud projects add-iam-policy-binding "$GCP_PROJECT" --member="serviceAccount:$
 # BigQuery 沒有「只能改 routine」的預設角色，只好給這個 dataset 的 dataEditor
 bq --project_id="$GCP_PROJECT" --location="$REGION" query --use_legacy_sql=false --quiet \
   "GRANT \`roles/bigquery.dataEditor\` ON SCHEMA \`$GCP_PROJECT.youtube_channel_summary\` TO \"serviceAccount:$DEPLOY_SA\"" >/dev/null
+# CREATE PROCEDURE 會先驗證 procedure 本體（strict mode），部署者要讀得到裡面查的表。
+# 不用 strict_mode=false 繞過：驗證能在部署時就抓到 SQL 寫錯，而不是等 workflow 呼叫才失敗。
+bq --project_id="$GCP_PROJECT" --location="$REGION" query --use_legacy_sql=false --quiet \
+  "GRANT \`roles/bigquery.dataViewer\` ON SCHEMA \`$GCP_PROJECT.youtube_taiwanplus_owner\` TO \"serviceAccount:$DEPLOY_SA\"" >/dev/null
 
 echo "== WIF：只信任 main 分支 =="
 # provider 已把 google.subject 對應到 OIDC 的 sub。這個 repo 開了 GitHub 的 immutable subject，
