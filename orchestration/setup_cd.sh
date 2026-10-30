@@ -59,10 +59,16 @@ bq --project_id="$GCP_PROJECT" --location="$REGION" query --use_legacy_sql=false
   "GRANT \`roles/bigquery.dataEditor\` ON SCHEMA \`$GCP_PROJECT.youtube_channel_summary\` TO \"serviceAccount:$DEPLOY_SA\"" >/dev/null
 
 echo "== WIF：只信任 main 分支 =="
-# provider 已把 google.subject 對應到 OIDC 的 sub；push 到 main 的 sub 是 repo:<repo>:ref:refs/heads/main
+# provider 已把 google.subject 對應到 OIDC 的 sub。這個 repo 開了 GitHub 的 immutable subject，
+# sub 會帶 owner 與 repo 的數字 ID：repo:<owner>@<id>/<repo>@<id>:ref:refs/heads/main。
+# 好處是 repo 被刪掉、別人再用同名建立時換不到這個 SA。前綴可以這樣查：
+#   curl -s https://api.github.com/repos/$GITHUB_REPO/actions/oidc/customization/sub
+SUB_PREFIX=$(curl -sf "https://api.github.com/repos/$GITHUB_REPO/actions/oidc/customization/sub" |
+  python -c "import sys,json; d=json.load(sys.stdin); print(d.get('sub_claim_prefix') or 'repo:$GITHUB_REPO')" | tr -d '\r')
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" --role=roles/iam.workloadIdentityUser \
-  --member="principal://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/subject/repo:$GITHUB_REPO:ref:refs/heads/main" \
+  --member="principal://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/subject/$SUB_PREFIX:ref:refs/heads/main" \
   "${P[@]}" >/dev/null
+echo "  $SUB_PREFIX:ref:refs/heads/main → $DEPLOY_SA"
 
 cat <<EOF
 

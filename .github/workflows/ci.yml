@@ -67,7 +67,7 @@ jobs:
 
   deploy:
     needs: [chatbox-tests, dbt-build]
-    # 只部署 main；WIF 也只讓 main 換成 dbt-deployer，兩邊都擋
+    # 只部署 main；WIF 也只讓 main 的 OIDC sub 換成 dbt-deployer，兩邊都擋
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -92,7 +92,7 @@ jobs:
       - name: refresh_* stored procedures
         run: |
           for f in orchestration/sql/*.sql; do
-            bq --project_id="$GCP_PROJECT" --location="$REGION" query --use_legacy_sql=false --quiet < "$f" >/dev/null
+            bq --project_id="$GCP_PROJECT" --location="$REGION" query --use_legacy_sql=false --quiet < "$f"
             echo "$(basename "$f" .sql)"
           done
       # 映像用 commit SHA 當 tag，從 job 的設定就查得到跑的是哪一版
