@@ -6,15 +6,15 @@
 #   GCP_PROJECT=<gcp-project> bash orchestration/setup_cd.sh
 #
 # 建立的東西：
-#   dbt-deployer SA  deploy / deploy-checks job 用（不需核准）。只能做這三件部署：
+#   dbt-deployer SA  deploy / deploy-checks job 用。只能做這三件部署：
 #     1. 推 dbt-daily-checks 映像、更新 job 用的映像
 #     2. 部署 workflow youtube-owner-chain
 #     3. 重建 youtube_channel_summary 裡的 refresh_* stored procedure（也要讀 youtube_taiwanplus_owner，建立時要驗證）
-#     不能動 dbt 的 prod dataset。WIF 只讓 main 分支換成這個 SA。
-#   dbt-prod SA      deploy-dbt job 用（要在 GitHub Environment prod 按核准）。dbt build --target prod：
-#     可讀全部資料，只能寫 dbt 的三個 prod dataset。WIF 只讓 environment prod 換成這個 SA。
+#     不能動 dbt 的 prod dataset。
+#   dbt-prod SA      deploy-dbt job 用。dbt build --target prod：可讀全部資料，只能寫 dbt 的三個 prod dataset。
 #
-# PR、其他分支、fork 都拿不到部署權限。
+# 兩個 SA 分開，任一個 job 出問題時能動到的範圍都比較小。
+# WIF 只讓 main 分支換成這兩個 SA：PR、其他分支、fork 都拿不到部署權限。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -41,7 +41,7 @@ gcloud iam service-accounts describe "$DEPLOY_SA" "${P[@]}" >/dev/null 2>&1 ||
     --description="GitHub Actions deploy job (main only): daily-checks image, owner-chain workflow, refresh procedures" "${P[@]}"
 gcloud iam service-accounts describe "$PROD_SA" "${P[@]}" >/dev/null 2>&1 ||
   gcloud iam service-accounts create dbt-prod --display-name="dbt prod build" \
-    --description="GitHub Actions deploy-dbt job (environment prod, approved): dbt build --target prod" "${P[@]}"
+    --description="GitHub Actions deploy-dbt job (main only): dbt build --target prod" "${P[@]}"
 
 echo "== 1. dbt-daily-checks 映像 =="
 gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" --location="$REGION" \
@@ -87,23 +87,16 @@ echo "== WIF =="
 SUB_PREFIX=$(curl -sf "https://api.github.com/repos/$GITHUB_REPO/actions/oidc/customization/sub" |
   python -c "import sys,json; d=json.load(sys.stdin); print(d.get('sub_claim_prefix') or 'repo:$GITHUB_REPO')" | tr -d '\r')
 SUBJECT="principal://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/subject"
-gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" --role=roles/iam.workloadIdentityUser \
-  --member="$SUBJECT/$SUB_PREFIX:ref:refs/heads/main" "${P[@]}" >/dev/null
-echo "  $SUB_PREFIX:ref:refs/heads/main → $DEPLOY_SA"
-# 用了 environment 的 job，sub 是 environment:<名稱>，不含分支。所以 GitHub 那邊的 environment
-# 一定要設「只允許 main」，再加上必要審核者，才算只有 main 而且有人核准才能寫 prod。
-gcloud iam service-accounts add-iam-policy-binding "$PROD_SA" --role=roles/iam.workloadIdentityUser \
-  --member="$SUBJECT/$SUB_PREFIX:environment:prod" "${P[@]}" >/dev/null
-echo "  $SUB_PREFIX:environment:prod → $PROD_SA"
+for sa in "$DEPLOY_SA" "$PROD_SA"; do
+  gcloud iam service-accounts add-iam-policy-binding "$sa" --role=roles/iam.workloadIdentityUser \
+    --member="$SUBJECT/$SUB_PREFIX:ref:refs/heads/main" "${P[@]}" >/dev/null
+  echo "  $SUB_PREFIX:ref:refs/heads/main → $sa"
+done
 
 cat <<EOF
 
-完成。接著到 GitHub repo → Settings：
-1. Secrets and variables → Actions 的 repository secret（已經有就略過）：
-     GCP_DEPLOY_SERVICE_ACCOUNT   $DEPLOY_SA
-2. Environments → New environment「prod」：
-     Required reviewers         勾選，加自己（不要勾 Prevent self-review）
-     Deployment branches        Selected branches and tags → 只加 main
-     Environment secret         GCP_PROD_SERVICE_ACCOUNT = $PROD_SA
-之後每次合併進 main：deploy 自動跑；deploy-dbt 等你在 Actions 頁面按核准；通過後 deploy-checks 換映像。
+完成。到 GitHub repo → Settings → Secrets and variables → Actions 確認有這 2 個 repository secret：
+  GCP_DEPLOY_SERVICE_ACCOUNT   $DEPLOY_SA
+  GCP_PROD_SERVICE_ACCOUNT     $PROD_SA
+之後每次合併進 main，CI 綠燈後自動部署：deploy 與 deploy-dbt 同時跑，deploy-dbt 成功後 deploy-checks 換映像。
 EOF

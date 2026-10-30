@@ -3,7 +3,7 @@
 #   dbt-build      整個專案建進 dbt_ci dataset 並跑全部 test，不碰 dev / prod
 # CD：只在 main 上、上面兩個 job 都綠燈後執行。
 #   deploy         refresh_* stored procedure、workflow youtube-owner-chain（自動）
-#   deploy-dbt     dbt build --target prod（GitHub Environment prod，要人按核准）
+#   deploy-dbt     dbt build --target prod（自動；合併前 dbt-build 已在 dbt_ci 跑過同一份程式碼）
 #   deploy-checks  dbt-daily-checks 映像（deploy-dbt 成功後才換）
 #
 # GCP 認證走 Workload Identity Federation：GitHub 簽發的 OIDC token 換成 dbt-ci / dbt-deployer / dbt-prod SA 的
@@ -69,7 +69,7 @@ jobs:
   # ---- CD：只在 main 上、CI 兩個 job 都綠燈後執行 ----
   # 每次合併都把 main 的版本整套推上去（每一步都可重複執行），手動改過的設定也會被拉回來。
 
-  # 1. 不碰 dbt 的部分，不需要核准
+  # 1. 不碰 dbt 的部分
   deploy:
     needs: [chatbox-tests, dbt-build]
     # 只部署 main；WIF 也只讓 main 的 OIDC sub 換成 dbt-deployer，兩邊都擋
@@ -105,17 +105,16 @@ jobs:
             --location="$REGION" --service-account="yt-chain@$GCP_PROJECT.iam.gserviceaccount.com" \
             --project="$GCP_PROJECT"
 
-  # 2. dbt 的 prod model：要在 GitHub Environment「prod」按核准才會跑
+  # 2. dbt 的 prod model。不另設人工核准：合併 PR 就是確認，dbt-build 也已經在 dbt_ci 建過、測過
   deploy-dbt:
     needs: [chatbox-tests, dbt-build]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # Environment 設了必要審核者、只允許 main；WIF 也只讓 environment:prod 的 OIDC sub 換成 dbt-prod
-    environment: prod
+    # WIF 只讓 main 的 OIDC sub 換成 dbt-prod
     permissions:
       contents: read
       id-token: write
-    # 等核准時又有新的合併，舊的那次會被取消，只留最新的（反正每次都部署整個 main）
+    # 連續合併時依序部署；排隊中的舊執行會被新的取代（反正每次都部署整個 main）
     concurrency:
       group: deploy-dbt
       cancel-in-progress: false
