@@ -94,7 +94,7 @@ gcloud eventarc triggers delete youtube-owner-transfer-finished --location=asia-
 | workflow | `orchestration/youtube_owner_chain.yaml` → `youtube-owner-chain` |
 
 - **每次都整套部署**，不判斷哪些檔案有改：三步都可重複執行，而且有人在 console 手動改過的設定，下一次合併就會被拉回 main 的版本。
-- **執行身分** `dbt-deployer`：只能推這個映像、改 `dbt-daily-checks` 這個 job、部署 workflow、寫 `youtube_channel_summary`。碰不到其他 Cloud Run 服務，也碰不到 dbt 的 prod dataset。
+- **執行身分** `dbt-deployer`：只能推這個映像、改 `dbt-daily-checks` 這個 job、部署 workflow、寫 `youtube_channel_summary`、讀 `youtube_taiwanplus_owner`（`CREATE PROCEDURE` 會驗證 procedure 本體，要讀得到裡面查的表）。碰不到其他 Cloud Run 服務，也碰不到 dbt 的 prod dataset。
 - **只有 main 拿得到部署權限**：WIF 綁的是 OIDC `sub` = `repo:shangweiyang79@191815197/taiwanplus-dbt@1415308526:ref:refs/heads/main`（repo 開了 immutable subject，sub 帶 owner 與 repo 的數字 ID，repo 被刪掉、別人再用同名建立也換不到）。PR、其他分支、fork 就算改了 workflow 檔也換不到 `dbt-deployer`。
 - **dbt 的 prod model 還不在 CD 裡**：仍手動 `dbt build --target prod`。之後會加成 GitHub Environment `prod`（要人按核准）的另一個 job。
 - **回滾**：revert 那個 commit 再合併，deploy job 會把舊版推回去。急的話直接把 job 指回上一個映像：`gcloud run jobs update dbt-daily-checks --image=<上一個 SHA 的映像> --region=asia-east1 $P`。
