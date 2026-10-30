@@ -17,7 +17,8 @@ flowchart LR
         GHA -->|"WIF → SA: dbt-ci"| CIDS[("dbt_ci dataset")]
         GHA --> CHK{"綠燈?"}
         CHK -->|是| MAIN["合併進 main"]
-        MAIN -->|"CI 再跑一次，綠燈後<br/>WIF → SA: dbt-deployer"| DEP["deploy<br/>映像、procedure、workflow"]
+        MAIN -->|"CI 再跑一次，綠燈後"| DEP["deploy<br/>procedure、workflow<br/>SA: dbt-deployer"]
+        MAIN --> DDBT["deploy-dbt<br/>dbt build --target prod<br/>SA: dbt-prod"] --> DCHK["deploy-checks<br/>每日檢查映像<br/>SA: dbt-deployer"]
     end
 ```
 
@@ -58,7 +59,7 @@ gcloud eventarc triggers delete youtube-owner-transfer-finished --location=asia-
 
 ## 為什麼每天只檢查、不重建
 
-所有 model 都是 view，查詢時才讀原始表，所以 ingestion 一寫入，Looker 和 chatbox 就看得到新資料，不需要每天 `dbt build`。重建只在程式碼改動時才需要，也就是部署；dbt model 的部署目前仍由人手動執行 `dbt build --target prod`（其他部署見下方「CD 做什麼」）。
+所有 model 都是 view，查詢時才讀原始表，所以 ingestion 一寫入，Looker 和 chatbox 就看得到新資料，不需要每天 `dbt build`。重建只在程式碼改動時才需要，也就是部署：合併進 main 後由 CD 的 `deploy-dbt` 自動執行 `dbt build --target prod`（見下方「CD 做什麼」）。
 
 每天真正會變的是**資料本身**，所以每日 job 做兩件事：
 
@@ -85,19 +86,22 @@ gcloud eventarc triggers delete youtube-owner-transfer-finished --location=asia-
 
 ## CD 做什麼
 
-同一個 `ci.yml` 裡的 `deploy` job：只在 main 上、`chatbox-tests` 與 `dbt-build` 都綠燈後執行，把 main 的版本推到 prod。
+同一個 `ci.yml` 裡的三個 job，只在 main 上、`chatbox-tests` 與 `dbt-build` 都綠燈後執行，把 main 的版本推到 prod：
 
-| 步驟 | 部署什麼 |
-|---|---|
-| stored procedures | `orchestration/sql/*.sql` → `youtube_channel_summary.refresh_*` |
-| 映像 | 在 runner 上 `docker build`（build 時會 `dbt parse`），tag 用 commit SHA，推到 Artifact Registry 後 `gcloud run jobs update dbt-daily-checks` |
-| workflow | `orchestration/youtube_owner_chain.yaml` → `youtube-owner-chain` |
+| Job | 部署什麼 | 何時跑 | 執行身分 |
+|---|---|---|---|
+| `deploy` | `orchestration/sql/*.sql` → `youtube_channel_summary.refresh_*`；`orchestration/youtube_owner_chain.yaml` → workflow `youtube-owner-chain` | CI 綠燈後 | `dbt-deployer` |
+| `deploy-dbt` | `dbt build --target prod`：重建 `dbt_internal`、`news_dept_social`、`social_hub` 裡的 view / seed，並跑全部 test | CI 綠燈後，與 `deploy` 同時 | `dbt-prod` |
+| `deploy-checks` | 在 runner 上 `docker build`（build 時會 `dbt parse`），tag 用 commit SHA，推到 Artifact Registry 後 `gcloud run jobs update dbt-daily-checks` | `deploy-dbt` 成功才跑 | `dbt-deployer` |
 
-- **每次都整套部署**，不判斷哪些檔案有改：三步都可重複執行，而且有人在 console 手動改過的設定，下一次合併就會被拉回 main 的版本。
-- **執行身分** `dbt-deployer`：只能推這個映像、改 `dbt-daily-checks` 這個 job、部署 workflow、寫 `youtube_channel_summary`、讀 `youtube_taiwanplus_owner`（`CREATE PROCEDURE` 會驗證 procedure 本體，要讀得到裡面查的表）。碰不到其他 Cloud Run 服務，也碰不到 dbt 的 prod dataset。
-- **只有 main 拿得到部署權限**：WIF 綁的是 OIDC `sub` = `repo:shangweiyang79@191815197/taiwanplus-dbt@1415308526:ref:refs/heads/main`（repo 開了 immutable subject，sub 帶 owner 與 repo 的數字 ID，repo 被刪掉、別人再用同名建立也換不到）。PR、其他分支、fork 就算改了 workflow 檔也換不到 `dbt-deployer`。
-- **dbt 的 prod model 還不在 CD 裡**：仍手動 `dbt build --target prod`。之後會加成 GitHub Environment `prod`（要人按核准）的另一個 job。
-- **回滾**：revert 那個 commit 再合併，deploy job 會把舊版推回去。急的話直接把 job 指回上一個映像：`gcloud run jobs update dbt-daily-checks --image=<上一個 SHA 的映像> --region=asia-east1 $P`。
+- **為什麼不另設人工核准**：合併 PR 就是確認，而且合併前 `dbt-build` 已經把同一份程式碼完整建進 `dbt_ci`、跑過全部 test。prod build 失敗時 GitHub 會寄信。
+- **為什麼映像要等 dbt build**：每日檢查用的是映像裡那份 test 定義。如果 view 還沒更新就先換映像，新的 test 會去查舊的 view，隔天 12:00 就會誤報。`deploy-dbt` 失敗時映像也不會換，檢查和 view 一直維持同一版。
+- **每次都整套部署**，不判斷哪些檔案有改：每一步都可重複執行，而且有人在 console 手動改過的設定，下一次合併就會被拉回 main 的版本。只改 chatbox 或文件的 PR 也會把同樣的 view 重建一次（幾分鐘，結果不變）。
+- **連續合併**：同一個 job 依序部署，排隊中的舊執行會被新的取代；反正每次都部署整個 main。
+- **`dbt-deployer`**：只能推這個映像、改 `dbt-daily-checks` 這個 job、部署 workflow、寫 `youtube_channel_summary`、讀 `youtube_taiwanplus_owner`（`CREATE PROCEDURE` 會驗證 procedure 本體，要讀得到裡面查的表）。碰不到其他 Cloud Run 服務，也碰不到 dbt 的 prod dataset。
+- **`dbt-prod`**：可讀全部資料（source 散在各平台的 dataset），只能寫 dbt 的三個 prod dataset。
+- **只有 main 拿得到部署權限**：兩個 SA 的 WIF 都綁 OIDC `sub` = `repo:shangweiyang79@191815197/taiwanplus-dbt@1415308526:ref:refs/heads/main`。這個 repo 開了 immutable subject，sub 帶 owner 與 repo 的數字 ID，repo 被刪掉、別人再用同名建立也換不到。PR、其他分支、fork 就算改了 workflow 檔也拿不到。
+- **回滾**：revert 那個 commit 再合併，三個 job 會把舊版推回去。急的話直接把 job 指回上一個映像：`gcloud run jobs update dbt-daily-checks --image=<上一個 SHA 的映像> --region=asia-east1 $P`；view 則在本機 checkout 舊 commit 跑 `dbt build --target prod`。
 
 ## 一次性設定
 
@@ -110,8 +114,8 @@ GCP_PROJECT=<gcp-project> ALERT_EMAIL=<you@example.com> bash orchestration/setup
 
 # 3. （建議）Settings → Branches 幫 main 加 branch protection：要求 CI 通過才能合併
 
-# 4. CD：建立 dbt-deployer SA 與只限 main 的 WIF binding，
-#    再依腳本最後印出的值新增 GCP_DEPLOY_SERVICE_ACCOUNT secret
+# 4. CD：建立 dbt-deployer、dbt-prod SA 與 WIF binding，
+#    再依腳本最後印出的值新增 GCP_DEPLOY_SERVICE_ACCOUNT、GCP_PROD_SERVICE_ACCOUNT 兩個 secret
 GCP_PROJECT=<gcp-project> bash orchestration/setup_cd.sh
 ```
 
