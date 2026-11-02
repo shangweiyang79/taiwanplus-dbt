@@ -131,6 +131,8 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
    - Talks / Connected 沒有主題分類
    - X 沒有觀看時長
    - YouTube Views 定義於 2026-08-27 變更；影片層 YouTube 資料從 2026-01-01 起
+   - 影片層各平台起始日不同：IG 2023 年起、FB 2024-01-01 起、YouTube 與 X 2026-01-01 起。2026 年以前只有 IG 和 FB，跨年比較不要用多平台合計（例如 2025 vs 2026 的新聞部總觀看）
+   - FB 2024–2025 的影片數字是 2026-11-02 匯出的凍結快照，累計到匯出日、之後不再更新
    - IG 每日流量於 2026-06-01 換算法（之前偏高 10～20%）
    - 每日流量各平台的起始日不同（見 §1），更早的期間沒有每日流量
 6. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
@@ -153,4 +155,5 @@ post_map 和主題分類只涵蓋 Newsroom，所以 Talks / Connected 的 vod_id
 - impressions / ctr 只有 YouTube 有；X 沒有觀看時長。
 - Talks / Connected 的 YouTube Shorts 目前無法辨識（yt_shorts 清單只涵蓋 TaiwanPlus News 與 Taiwan Explained），orientation 會是 'video'。
 - YouTube 資料只從 2026-01-01 起；IG 從 2023 年起；X 早期月份可能不完整。
+- FB 從 2024-01-01 起：2024–2025 來自 2026-11-02 匯出的 Meta 後台檔（凍結快照，不再更新，沒有 vod_id／主題分類），2026 起每天更新。
 {% enddocs %}

@@ -51,7 +51,7 @@ flowchart TB
 - **Zero-downtime migration.** Rebuilt 13 legacy `social_hub` views in dbt **under the same names**. A row-level reconcile script proved the outputs identical (only float noise < 1e-11 and 2 rows of `APPROX_QUANTILES` approximation differed), so **Looker Studio needed no rewiring**.
 - **Resolved a metric ambiguity.** "Views" meant two different things in different reports. I split it into **daily traffic** (the KPI: views that *happened* in the period) and **video level** (for root cause: *cumulative* views by publish date). For the same unit and month, the two can differ by **~2×**, which is why the reports used to disagree.
 - **Fixed silent data bugs.** Summing the raw Instagram snapshot table **inflates views 100×+**. The account-level daily deltas also **went negative** whenever the API dropped reels (at one point more than half of an account's reels vanished from the feed in a single day). Per-reel snapshot deltas with a running max fixed it: one month's watch time went from a **six-figure negative** number to the correct positive value.
-- **Tested and documented.** **39 tests** (30 generic + 9 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
+- **Tested and documented.** **43 tests** (32 generic + 11 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
 - **Automated, keyless operations.** Every PR is built and tested in an isolated dataset; merging to `main` deploys prod with no manual step. Daily checks run freshness and every test against prod, and an event-driven Workflow refreshes YouTube data as soon as it lands instead of guessing a schedule. All of it runs on per-job least-privilege service accounts through Workload Identity Federation, with no keys ([§4](#4-data-quality--testing)).
 - **Semantic layer → AI.** 2 semantic models, 17 metrics and 2 saved queries are compiled into an AI context file. A Conversational Analytics agent plus a Streamlit chatbox (Cloud Run behind IAP, **verified read-only** service account) passes **20/20** eval questions (10 questions × original/paraphrase) with a **median latency of 20.4 s**. A number checker flags any figure in the answer that is not in the query result.
 - **Honest forecasting backtest.** Multi-cutoff backtest of **TimesFM vs ARIMA_PLUS vs naive**: TimesFM wins on X (**11%** 28-day error vs 21% naive), but **naive beats it on Newsroom YouTube** (18% vs 27%). So forecasts are used as a reference in the biweekly report, never as a KPI.
@@ -179,14 +179,15 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 
 ## 4. Data quality & testing
 
-**39 dbt tests** run with every `dbt build`.
+**43 dbt tests** run with every `dbt build`.
 
-- **30 generic tests:** `unique` / `not_null` on every grain key, and `accepted_values` on `dept_scope`, `platform` and `content_type`. Source tests cover upstream keys too.
-- **9 singular tests:**
+- **32 generic tests:** `unique` / `not_null` on every grain key, and `accepted_values` on `dept_scope`, `platform` and `content_type`. Source tests cover upstream keys too.
+- **11 singular tests:**
 
 | Test | What it guards |
 |---|---|
 | [`assert_daily_traffic_matches_sources`](tests/assert_daily_traffic_matches_sources.sql) | The fact table equals an independent sum of the raw sources |
+| [`assert_ig_watch_hours_matches_source`](tests/assert_ig_watch_hours_matches_source.sql) | Monthly IG watch hours equal the upstream `ig_daily_watch_hours` view (the same numbers as the IG daily report and the Excel history) |
 | [`assert_daily_traffic_monthly_agg_matches_fct`](tests/assert_daily_traffic_monthly_agg_matches_fct.sql) | The certified monthly KPI table equals the daily fact |
 | [`assert_monthly_agg_matches_fct`](tests/assert_monthly_agg_matches_fct.sql) | Same, for the video-level grain |
 | [`assert_daily_traffic_non_negative`](tests/assert_daily_traffic_non_negative.sql) | No negative views or watch hours (see Decision 2) |
@@ -195,8 +196,9 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 | [`assert_post_map_post_has_single_vod`](tests/assert_post_map_post_has_single_vod.sql) | A social post never maps to two CMS videos (prevents fan-out) |
 | [`assert_classified_vod_not_shorts`](tests/assert_classified_vod_not_shorts.sql) | Topic-classified long-form videos are not Shorts |
 | [`assert_vod_publish_date_matches_vod_id`](tests/assert_vod_publish_date_matches_vod_id.sql) | CMS IDs and publish dates are consistent |
+| [`assert_fb_history_no_overlap`](tests/assert_fb_history_no_overlap.sql) | The frozen 2024–2025 Facebook history table and the live 2026+ table never share a video (warn; staging already keeps the live row) |
 
-- **Source freshness:** thresholds are tuned per source to how it is actually loaded. For example, weekly loads warn after 8 days and error after 14; the YouTube owner report has a known reporting lag, so it was relaxed to 7/10 days based on observed latency. A retired account (Connected IG) is excluded from freshness checks on purpose.
+- **Source freshness:** thresholds are tuned per source to how it is actually loaded. For example, weekly loads warn after 8 days and error after 14; the YouTube owner report has a known reporting lag, so it was relaxed to 7/10 days based on observed latency. A retired account (Connected IG) and the frozen 2024–2025 Facebook history (a one-off import of a Meta export, unioned with the live table in staging) are excluded from freshness checks on purpose.
 - **Documentation as data:** `persist_docs` writes every model and column description into BigQuery, so BigQuery's own Gemini features read the same definitions as humans do.
 - **Daily checks in prod:** Cloud Scheduler triggers a Cloud Run Job every day after ingestion. The job runs `dbt source freshness` and `dbt test` against prod and emails an alert if either fails. All models are views, so the data is always current and nothing needs a daily rebuild. What changes day to day is the data itself, so the job only checks it. It runs as a **read-only** service account and cannot modify prod.
 - **Event-driven upstream refresh:** the YouTube content-owner reports have no fixed "done" time. Day D first lands on D+2 at any time between 13:37 and 23:51, then gets corrected again later. Fixed-time scheduled queries were therefore always a step behind. Now each transfer run publishes a Pub/Sub notification. Eventarc starts a Cloud Workflow, which checks whether the owner tables are newer than the derived tables. Only when they are does it refresh the derived YouTube tables (SQL versioned as stored procedures in [`orchestration/sql/`](orchestration/sql/)) and then run the dbt checks. The newest YouTube day now reaches the models about a day earlier.
@@ -221,7 +223,7 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 **Chatbox design highlights**
 - **Least privilege.** The app runs as a read-only service account that can only read `news_dept_social`. [`verify_readonly.py`](ai_context/ca_agent/verify_readonly.py) proves that writes are rejected.
 - **Two answer modes.** *Fast* (CA API fetch + answer) for lookups. *Deep* (CA API fetch → Gemini Flash streams the analysis) for "why / is it real / which is best". Deep mode replaced the CA API's THINKING mode: median **20.4 s vs ~29 s**, same quality, and text starts streaming as soon as data arrives.
-- **Guardrails.** [`narrator.unmatched_numbers`](chatbox_app/narrator.py) flags any number in the answer that is not in the query result. [`notes.py`](chatbox_app/notes.py) appends rule-based caveats (YouTube 8/27 change, IG 6/1 method change, retired accounts, incomplete current month) only when the answer omitted them, and it is unit-tested.
+- **Guardrails.** [`narrator.unmatched_numbers`](chatbox_app/narrator.py) flags any number in the answer that is not in the query result. [`notes.py`](chatbox_app/notes.py) appends rule-based caveats (YouTube 8/27 change, IG 6/1 method change, platforms with no video-level data before 2026, retired accounts, incomplete current month) only when the answer omitted them, and it is unit-tested.
 - **Evaluation.** [`ai_context/eval_questions.yml`](ai_context/eval_questions.yml) holds golden questions with reference SQL, `must_mention` and `must_not` rules: traps such as cross-platform ranking, the wrong grain and the definition change. Latest deep-mode run: **20/20 pass** ([summary](ai_context/ca_agent/eval_results/SUMMARY.md)).
 
 Operational runbook (deploy, IAP access, logging, cost): [`chatbox_app/README.md`](chatbox_app/README.md) (internal, in Chinese).
@@ -250,7 +252,7 @@ No model wins everywhere, and viral-driven series (Talks) aren't forecastable at
 | [`models/social_hub/`](models/social_hub/) | 13 legacy-compatible views for Looker Studio |
 | [`models/docs/_definitions.md`](models/docs/_definitions.md) | **Single source of business definitions** (change definitions only here) |
 | [`seeds/`](seeds/) | Governed mappings: `dept_accounts`, `youtube_channels`, `platform_metric_glossary` |
-| [`tests/`](tests/) | 9 singular data tests |
+| [`tests/`](tests/) | 11 singular data tests |
 | [`macros/`](macros/) | Prod dataset routing; shared macro for per-platform compat views |
 | [`scripts/`](scripts/) | Reconcile, AI-context generator, eval reference runner, forecast backtest |
 | [`ai_context/`](ai_context/) | Generated AI context, eval question bank, CA agent build/deploy/eval, Claude skill |
