@@ -19,6 +19,8 @@ THINKING_PATTERN = re.compile(
 
 YT_BREAK = dt.date(2026, 8, 27)
 IG_BREAK = dt.date(2026, 6, 1)
+# 影片層 YouTube / X 從這天起；更早只有 IG（2023 起）與 FB（2024 起，2024–2025 是凍結快照）
+VIDEO_LAYER_ALL_PLATFORMS = dt.date(2026, 1, 1)
 DAILY_TABLES = {"agg_news_dept_daily_traffic_monthly", "fct_daily_traffic"}
 VIDEO_TABLES = {"fct_social_post_performance", "agg_news_dept_social_monthly"}
 SCOPE_LABELS = {"newsroom": "Newsroom", "talks": "Talks", "connected": "Connected"}
@@ -78,6 +80,11 @@ def build_notes(results, today=None):
                      "Views 的成長有一部分來自定義放寬，請搭配 Engaged views 判讀。")
     if "Instagram" in platforms and period and period[0] < IG_BREAK and DAILY_TABLES & set(tables):
         notes.append("IG 每日流量在 2026-06-01 前是舊算法（快照相減），通常比之後的官方 API 偏高 10～20%。")
+    if (VIDEO_TABLES & set(tables) and period and period[0] < VIDEO_LAYER_ALL_PLATFORMS
+            and platforms != {"Instagram"}):
+        notes.append("影片層各平台起始日不同：IG 2023 年、FB 2024-01-01、YouTube 與 X 2026-01-01 起。"
+                     "2026 年以前只有 IG 和 FB，跨年比較不要用多平台合計；"
+                     "FB 2024–2025 是 2026-11-02 匯出的凍結快照，之後不再更新。")
     if "Instagram" in platforms and (not scopes or "connected" in scopes):
         notes.append("Connected 的 IG 已於 2026-07-04 停更，之後的觀看來自舊貼文。")
     if len(platforms) >= 2:
@@ -92,6 +99,7 @@ def build_notes(results, today=None):
 _ALREADY_SAID = {
     "YouTube 自": ("8-27", "8/27", "08/27", "8 月 27", "August 27"),
     "IG 每日流量": ("06-01", "6/1", "6 月 1", "June 1"),
+    "影片層各平台起始日": ("起始日", "2026 年以前", "凍結", "snapshot", "2026-01-01 起"),
     "Connected 的 IG": ("停更", "discontinued", "stopped"),
     "各平台觀看門檻": ("門檻", "threshold"),
     "期間包含本月": ("本月", "尚未完整", "incomplete"),

@@ -75,6 +75,31 @@ def test_period_from_sql_literals_and_unsaid():
     assert any("2026-06-01" in n for n in left)
 
 
+def test_video_layer_coverage_before_2026():
+    # 2025 vs 2026 的影片層跨平台比較：2026 年以前只有 IG 和 FB
+    res = [{"rows": [{"year_month": "2025-09", "platform": "Facebook"}, {"year_month": "2026-09", "platform": "YouTube"}],
+            "sql": "FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    notes = build_notes(res, TODAY)
+    assert any(n.startswith("影片層各平台起始日") for n in notes)
+    assert unsaid(notes, "注意 2026 年以前只有 IG 和 FB。") == [n for n in notes if not n.startswith("影片層各平台起始日")]
+    # 只查 FB 2025 也要提醒（凍結快照）
+    fb_only = [{"rows": [{"publish_date": "2025-06-13", "platform": "Facebook"}],
+                "sql": "FROM `p.news_dept_social.fct_social_post_performance`"}]
+    assert any(n.startswith("影片層各平台起始日") for n in build_notes(fb_only, TODAY))
+
+
+def test_video_layer_coverage_not_triggered():
+    # 每日流量、2026 年內、或只查 IG 都不提醒
+    daily = [{"rows": [{"year_month": "2025-09", "platform": "Facebook"}, {"year_month": "2025-09", "platform": "YouTube"}],
+              "sql": "FROM `p.news_dept_social.agg_news_dept_daily_traffic_monthly`"}]
+    in_2026 = [{"rows": [{"year_month": "2026-03", "platform": "Facebook"}, {"year_month": "2026-03", "platform": "YouTube"}],
+                "sql": "FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    ig_only = [{"rows": [{"year_month": "2024-05", "platform": "Instagram"}],
+                "sql": "FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    for res in (daily, in_2026, ig_only):
+        assert not any(n.startswith("影片層各平台起始日") for n in build_notes(res, TODAY)), res
+
+
 def test_unmatched_numbers():
     from narrator import unmatched_numbers
     res = [{"rows": [{"views": 2345678.0, "x": 567890}], "sql": ""}]

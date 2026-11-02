@@ -134,13 +134,29 @@ sources:
             warn_after: {count: 54, period: hour}
             error_after: {count: 72, period: hour}
       - name: TaiwanPlus_news_videos
-        description: Newsroom 的 FB 影片，一列一支影片，數字為累計值。
+        description: >
+          Newsroom 的 FB 影片，一列一支影片，數字為累計值。只含 2026-01-01 之後發布的影片
+          （Cloud Run fb-news-videos 每天 10:20 回刷最近 30 天發布的影片）；更早的在 TaiwanPlus_news_videos_history。
         # updated_at 是實際寫入時間（每天約 10:20），延遲最長約 1 天
         config:
           loaded_at_field: updated_at
           freshness:
             warn_after: {count: 36, period: hour}
             error_after: {count: 48, period: hour}
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
+      - name: TaiwanPlus_news_videos_history
+        description: >
+          Newsroom 的 FB 影片 2024-01-01～2025-12-31（台北日期），欄位與 TaiwanPlus_news_videos 相同另加 post_id、
+          1 分鐘觀看、is_crosspost、data_source。來源是 2026-11-02 匯出的 Meta 後台 CSV
+          （data_source = 'meta_export_20261102'），另有 14 支 2025-12-31 的影片匯出檔沒有、由 API 補（data_source = 'api'）。
+          凍結快照：數字累計到匯出日，之後不再更新。含 crosspost（與後台一致）。
+          reach 是匯出檔的值，與 2026 年 API 的 reach 口徑不同，不能嚴格比較。
+          匯入腳本：news/cloudrun_fb_news_videos/import_history_csv.py。
+        # 凍結不更新，所以不檢查 freshness（不能照抄上面原表的 updated_at 門檻，否則每天報錯）
+        config:
+          freshness: null
         columns:
           - name: video_id
             data_tests: [unique, not_null]

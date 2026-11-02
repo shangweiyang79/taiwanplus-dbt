@@ -1,6 +1,6 @@
 # TaiwanPlus 新聞部社群成效：AI 查詢說明
 
-> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-10-27），**不要手改**。
+> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-11-02），**不要手改**。
 > 定義的來源是 dbt 專案：`models/docs/_definitions.md`、`models/marts/_marts.yml`、`seeds/`。
 > 資料庫是 BigQuery（專案 `${GCP_PROJECT}`，查詢時代換成實際的專案 ID；位置 asia-east1），SQL 一律用 GoogleSQL。
 
@@ -116,6 +116,8 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
    - Talks / Connected 沒有主題分類
    - X 沒有觀看時長
    - YouTube Views 定義於 2026-08-27 變更；影片層 YouTube 資料從 2026-01-01 起
+   - 影片層各平台起始日不同：IG 2023 年起、FB 2024-01-01 起、YouTube 與 X 2026-01-01 起。2026 年以前只有 IG 和 FB，跨年比較不要用多平台合計（例如 2025 vs 2026 的新聞部總觀看）
+   - FB 2024–2025 的影片數字是 2026-11-02 匯出的凍結快照，累計到匯出日、之後不再更新
    - IG 每日流量於 2026-06-01 換算法（之前偏高 10～20%）
    - 每日流量各平台的起始日不同（見 §1），更早的期間沒有每日流量
 6. 平均值易被少數爆量貼文拉高，引用平均時一併看 `max_views_per_post`。
@@ -319,7 +321,7 @@ ORDER BY 1, 2
 |---|---|---|---|---|---|---|
 | newsroom | Newsroom | YouTube | TaiwanPlus News / TaiwanPlus Livestream / Taiwan Explained by TaiwanPlus | youtube_channel_summary.video_news_broad |  | 新聞部原本的範圍 |
 | newsroom | Newsroom | Instagram | Newsroom IG | Instagram_data.News |  |  |
-| newsroom | Newsroom | Facebook | Newsroom FB | Facebook_data.TaiwanPlus_news_videos |  |  |
+| newsroom | Newsroom | Facebook | Newsroom FB | Facebook_data.TaiwanPlus_news_videos + TaiwanPlus_news_videos_history |  | 2024–2025 為 2026-11-02 匯出的凍結快照（歷史表），2026-01-01 起每天更新 |
 | newsroom | Newsroom | X | Newsroom X | X_data.post_metrics |  |  |
 | talks | Talks | YouTube | Taiwan Talks | youtube_channel_summary.video_news_broad |  |  |
 | talks | Talks | Instagram | Talks IG | Instagram_data.Talks |  |  |
