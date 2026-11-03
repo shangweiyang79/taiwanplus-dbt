@@ -112,7 +112,8 @@ def build_notes(results, today=None):
                      "2026 年以前只有 IG 和 FB，跨年比較不要用多平台合計；"
                      "FB 2024–2025 是 2026-11-02 匯出的凍結快照，之後不再更新。")
     if "Instagram" in platforms and (not scopes or "connected" in scopes):
-        notes.append("Connected 的 IG 已於 2026-07-04 停更，之後的觀看來自舊貼文。")
+        notes.append("Connected 的 IG 已於 2026-07-04 停更，之後的觀看來自舊貼文；"
+                     "2026-09-29 起暫停收集每日流量，之後沒有資料（不是 0 次觀看）。")
     if len(platforms) >= 2:
         notes.append("各平台觀看門檻與受眾不同（FB 3 秒、X 連續 2 秒、IG 約 0.3～0.5 秒、YouTube 約 1 秒），"
                      "不能用絕對值比較平台優劣；FB 數字大是因為菲律賓受眾，不是門檻低。")
@@ -126,7 +127,8 @@ _ALREADY_SAID = {
     "YouTube 自": ("8-27", "8/27", "08/27", "8 月 27", "August 27"),
     "IG 每日流量": ("06-01", "6/1", "6 月 1", "June 1"),
     "影片層各平台起始日": ("起始日", "2026 年以前", "凍結", "snapshot", "2026-01-01 起"),
-    "Connected 的 IG": ("停更", "discontinued", "stopped"),
+    # 只講停更、沒講暫停收集時仍要補提醒，所以關鍵字用「暫停收集」相關的字
+    "Connected 的 IG": ("暫停收集", "9-29", "9/29", "9 月 29", "paused"),
     "各平台觀看門檻": ("門檻", "threshold"),
     "期間包含本月": ("本月", "尚未完整", "incomplete"),
 }

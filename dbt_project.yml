@@ -46,3 +46,4 @@ seeds:
     dept_accounts:
       +column_types:
         active_to: date
+        daily_traffic_to: date

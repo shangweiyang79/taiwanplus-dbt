@@ -37,6 +37,16 @@ def test_ig_old_method_and_multi_platform():
     assert not any("YouTube 自" in n for n in notes)
 
 
+def test_connected_ig_collection_paused():
+    # Connected IG 2026-09-29 起暫停收集每日流量：提醒要說是「沒有資料」，回答只講停更時仍要補
+    res = [{"rows": [{"year_month": "2026-08", "platform": "Instagram", "dept_scope": "connected"}],
+            "sql": "FROM `p.news_dept_social.agg_news_dept_daily_traffic_monthly` WHERE dept_scope = 'connected'"}]
+    notes = build_notes(res, TODAY)
+    assert any("2026-09-29" in n and "不是 0" in n for n in notes)
+    assert any(n.startswith("Connected 的 IG") for n in unsaid(notes, "Connected 的 IG 已停更。"))
+    assert not any(n.startswith("Connected 的 IG") for n in unsaid(notes, "9/29 起暫停收集每日流量。"))
+
+
 def test_current_month_and_scope_line():
     res = [{"rows": [{"date": "2026-10-03", "platform": "X", "dept_scope": "newsroom"}],
             "sql": "SELECT * FROM `p.news_dept_social.fct_daily_traffic` WHERE dept_scope = 'newsroom' AND platform = 'X'"}]

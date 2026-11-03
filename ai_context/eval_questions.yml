@@ -85,12 +85,13 @@ questions:
       period: 最近三個完整月份
     must_mention:
       - Connected 的 IG 已於 2026-07-04 停更，沒有新貼文
-      - 停更後舊貼文每天仍有少量觀看（每日流量不是 0）
+      - 停更後舊貼文每天仍有少量觀看；因為每天不到 100 次，每日流量 2026-09-29 起暫停收集，之後是沒有資料、不是 0
       - 若要看 Connected 近期表現，應改看 YouTube
     must_not:
       - 把觀看下滑解讀成「表現很差」
+      - 把 2026-09-29 之後說成 0 次觀看
     reference_sql: |
-      SELECT a.year_month, a.views, a.story_views, d.active_to, d.note
+      SELECT a.year_month, a.views, a.story_views, a.days_with_data, d.active_to, d.daily_traffic_to, d.note
       FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly` a
       JOIN `${GCP_PROJECT}.news_dept_social.dept_accounts` d USING (dept_scope, platform)
       WHERE a.dept_scope = 'connected' AND a.platform = 'Instagram'

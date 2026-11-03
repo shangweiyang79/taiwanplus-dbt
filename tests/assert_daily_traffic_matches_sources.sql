@@ -29,7 +29,10 @@ with expected as (
     union all select date, 'newsroom', `IG News Story VV` from {{ source('instagram', 'ig_stories_pivot_daily') }}
     union all select date, 'talks', `IG Talks Story VV` from {{ source('instagram', 'ig_stories_pivot_daily') }}
     union all select date, 'connected', `IG Connected Story VV` from {{ source('instagram', 'ig_stories_pivot_daily') }}
-  )
+  ) ig
+  -- 暫停收集後上游補的 0 不算（與 fct 相同的規則，日期取自 seed dept_accounts.daily_traffic_to）
+  where not exists (select 1 from {{ ref('dept_accounts') }} a
+                    where a.platform = 'Instagram' and a.dept_scope = ig.dept_scope and ig.d > a.daily_traffic_to)
   group by 1, 2, 3
 ),
 actual as (

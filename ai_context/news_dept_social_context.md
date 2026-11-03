@@ -1,6 +1,6 @@
 # TaiwanPlus 新聞部社群成效：AI 查詢說明
 
-> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-11-02），**不要手改**。
+> 由 `taiwanplus_dbt/scripts/build_ai_context.py` 自動產生（2026-11-03），**不要手改**。
 > 定義的來源是 dbt 專案：`models/docs/_definitions.md`、`models/marts/_marts.yml`、`seeds/`。
 > 資料庫是 BigQuery（專案 `${GCP_PROJECT}`，查詢時代換成實際的專案 ID；位置 asia-east1），SQL 一律用 GoogleSQL。
 
@@ -14,7 +14,7 @@
 - 各單位經營的平台：
   - Newsroom：YouTube（TaiwanPlus News / TaiwanPlus Livestream / Taiwan Explained by TaiwanPlus）、Instagram、Facebook、X
   - Talks：YouTube（Taiwan Talks）、Instagram
-  - Connected：YouTube（CONNECTED on TaiwanPlus）；Instagram 於 2026-07-04 停更，歷史資料保留
+  - Connected：YouTube（CONNECTED on TaiwanPlus）；Instagram 於 2026-07-04 停更，歷史資料保留，每日流量 2026-09-29 起暫停收集
 - 單位、平台、原表的完整對照見 seed `dept_accounts`。
 
 ### 每日流量與影片層（兩種觀看數）
@@ -35,7 +35,7 @@
 - **IG 於 2026-06-01 換算法**：之前是每支 reel 的 Total Plays 累計快照逐支相減（`source_method = reel_snapshot_delta`），和之後的官方 API 相比通常偏高 10～20%；跨 6/1 比較 IG 趨勢時要說明。
 - IG 觀看時數與 IG 每日報表（`daily_ig_summary_report_new`）同一份數字：2026-10-25 前是人工校正過的歷史紀錄，2026-10-26 起逐支 reel 快照相減；沒有 API 漏抓 / 回傳 0 造成的負數（例如 2026-07 舊報表的時數曾出現大幅負數）。
 - IG 的 views 含影片類 Stories（`story_views` 另列）；YouTube / FB 含付費觀看（`paid_views` 另列）。
-- Connected 的 IG 停更後，舊貼文每天仍有觀看，所以每日流量不會是 0（影片層的新發布則是 0）。
+- Connected 的 IG 停更後，舊貼文每天仍有少量觀看；因為連續多日每天不到 100 次，**2026-09-29 起暫停收集每日流量**，最後一天是 2026-09-28（`dept_accounts.daily_traffic_to`）。之後**沒有資料，不是 0 次觀看**（上游報表會補 0，dbt 已排除）。影片層停在 2026-09-30 的快照。
 - TaiwanPlus Livestream 頻道的每日流量到 2026-08-05 為止。
 
 ### 各平台觀看的計算門檻
@@ -112,7 +112,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 3. **YouTube 以 Views 為主、Engaged views 為輔**。期間跨過 2026-08-27 時，Views 的成長不能全部歸因於成效，要搭配 Engaged views 說明有多少來自定義放寬。
 4. 影片層的最新月份累計天數少、天生偏低，不要解讀成衰退；每日流量的本月則是天數未滿（看 `days_with_data`）。
 5. 主動說明資料限制：
-   - Connected 的 IG 於 2026-07-04 停更
+   - Connected 的 IG 於 2026-07-04 停更；每日流量 2026-09-29 起暫停收集，之後沒有資料（不要說成 0 次觀看），影片層停在 2026-09-30 的快照
    - Talks / Connected 沒有主題分類
    - X 沒有觀看時長
    - YouTube Views 定義於 2026-08-27 變更；影片層 YouTube 資料從 2026-01-01 起
@@ -228,6 +228,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | `account_label` | 帳號 / 頻道名稱。 |
 | `source_table` | 該帳號成效資料所在的 BigQuery 原表。 |
 | `active_to` | 停更日期。NULL 表示仍在經營。 |
+| `daily_traffic_to` | 每日流量收集的最後一天（含）。NULL 表示仍在收集。之後的日期上游報表會補 0， fct_daily_traffic 會排除這些日期，所以是「沒有資料」，不是 0 次觀看。 |
 | `note` | 備註。 |
 
 ### `${GCP_PROJECT}.news_dept_social.platform_metric_glossary`
@@ -317,16 +318,16 @@ ORDER BY 1, 2
 
 ### dept_accounts（單位 × 平台）
 
-| dept_scope | dept_label | platform | account_label | source_table | active_to | note |
-|---|---|---|---|---|---|---|
-| newsroom | Newsroom | YouTube | TaiwanPlus News / TaiwanPlus Livestream / Taiwan Explained by TaiwanPlus | youtube_channel_summary.video_news_broad |  | 新聞部原本的範圍 |
-| newsroom | Newsroom | Instagram | Newsroom IG | Instagram_data.News |  |  |
-| newsroom | Newsroom | Facebook | Newsroom FB | Facebook_data.TaiwanPlus_news_videos + TaiwanPlus_news_videos_history |  | 2024–2025 為 2026-11-02 匯出的凍結快照（歷史表），2026-01-01 起每天更新 |
-| newsroom | Newsroom | X | Newsroom X | X_data.post_metrics |  |  |
-| talks | Talks | YouTube | Taiwan Talks | youtube_channel_summary.video_news_broad |  |  |
-| talks | Talks | Instagram | Talks IG | Instagram_data.Talks |  |  |
-| connected | Connected | YouTube | CONNECTED on TaiwanPlus | youtube_channel_summary.video_news_broad |  |  |
-| connected | Connected | Instagram | Connected IG | Instagram_data.Connected | 2026-07-04 | 已停更，歷史資料保留；實測最後一則 reel 發布於 2026-07-10 |
+| dept_scope | dept_label | platform | account_label | source_table | active_to | daily_traffic_to | note |
+|---|---|---|---|---|---|---|---|
+| newsroom | Newsroom | YouTube | TaiwanPlus News / TaiwanPlus Livestream / Taiwan Explained by TaiwanPlus | youtube_channel_summary.video_news_broad |  |  | 新聞部原本的範圍 |
+| newsroom | Newsroom | Instagram | Newsroom IG | Instagram_data.News |  |  |  |
+| newsroom | Newsroom | Facebook | Newsroom FB | Facebook_data.TaiwanPlus_news_videos + TaiwanPlus_news_videos_history |  |  | 2024–2025 為 2026-11-02 匯出的凍結快照（歷史表），2026-01-01 起每天更新 |
+| newsroom | Newsroom | X | Newsroom X | X_data.post_metrics |  |  |  |
+| talks | Talks | YouTube | Taiwan Talks | youtube_channel_summary.video_news_broad |  |  |  |
+| talks | Talks | Instagram | Talks IG | Instagram_data.Talks |  |  |  |
+| connected | Connected | YouTube | CONNECTED on TaiwanPlus | youtube_channel_summary.video_news_broad |  |  |  |
+| connected | Connected | Instagram | Connected IG | Instagram_data.Connected | 2026-07-04 | 2026-09-28 | 已停更，歷史資料保留；實測最後一則 reel 發布於 2026-07-10。每日流量連續多日不到 100，2026-09-29 起暫停收集（之後上游補 0，dbt 已排除）；影片層停在 2026-09-30 的快照 |
 
 ### platform_metric_glossary（指標 × 平台）
 

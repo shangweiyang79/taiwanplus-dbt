@@ -17,13 +17,23 @@
     'stg_daily__instagram_stories',
 ] %}
 
+-- 帳號暫停收集每日流量後（seed dept_accounts.daily_traffic_to），上游報表仍會補 0（COALESCE），
+-- 這些日期在這裡排除：它們是「沒有資料」，不是 0 次觀看（例如 Connected IG 2026-09-29 起）。
+
 with unioned as (
 {% for m in models %}
   select {{ cols | join(', ') }}
   from {{ ref(m) }}
   {% if not loop.last %}union all{% endif %}
 {% endfor %}
+),
+
+collection_end as (
+  select dept_scope, platform, daily_traffic_to
+  from {{ ref('dept_accounts') }}
+  where daily_traffic_to is not null
 )
+
 select
   concat(cast(date as string), ':', dept_scope, ':', platform, ':', content_type) as traffic_uid,
   date,
@@ -37,5 +47,7 @@ select
   engaged_views,
   watch_time_hours,
   source_method
-from unioned
-where date is not null
+from unioned u
+left join collection_end e using (dept_scope, platform)
+where u.date is not null
+  and (e.daily_traffic_to is null or u.date <= e.daily_traffic_to)
