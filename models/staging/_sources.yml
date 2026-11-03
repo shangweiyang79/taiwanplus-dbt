@@ -86,6 +86,7 @@ sources:
           IG 每日流量（2026-06-01 起）：觀看來自官方 API（account_daily_insights）。
           時數欄位自 2026-10-27 起改讀 ig_daily_watch_hours，不再有負數；dbt 只取這張的觀看數，時數直接讀 ig_daily_watch_hours。
           News / Talks / Connected / Social(Program) 為欄；Program 不屬於新聞部。
+          Connected 2026-09-29 起暫停收集，欄位的 0 是 COALESCE 補的、不是實際觀看；dbt 依 seed dept_accounts.daily_traffic_to 排除。
           定義見 TaiwanPlus_api/sql/daily_ig_summary_report_new.sql。
         # 以下三張 view 的日期是「前一天」，延遲最長約 2.1 天，門檻比 source 層級多一天
         config:
@@ -115,6 +116,7 @@ sources:
       - name: Connected
         description: >
           Connected 的 IG 帳號，2026-07-04 停更（實測最後一則 reel 發布於 2026-07-10），歷史資料保留。
+          快照收集到 data_date 2026-09-30（每日流量連續不到 100 而暫停），之後影片層數字不再變。
           已停更所以不檢查 freshness。沒有 caption / thumbnail_url 欄位。
         config:
           freshness: null

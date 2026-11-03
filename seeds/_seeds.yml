@@ -15,6 +15,10 @@ seeds:
         description: 該帳號成效資料所在的 BigQuery 原表。
       - name: active_to
         description: 停更日期。NULL 表示仍在經營。
+      - name: daily_traffic_to
+        description: >
+          每日流量收集的最後一天（含）。NULL 表示仍在收集。之後的日期上游報表會補 0，
+          fct_daily_traffic 會排除這些日期，所以是「沒有資料」，不是 0 次觀看。
       - name: note
         description: 備註。
 

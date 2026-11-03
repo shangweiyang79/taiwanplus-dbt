@@ -37,6 +37,16 @@ def test_ig_old_method_and_multi_platform():
     assert not any("YouTube 自" in n for n in notes)
 
 
+def test_connected_ig_collection_paused():
+    # Connected IG 2026-09-29 起暫停收集每日流量：提醒要說是「沒有資料」，回答只講停更時仍要補
+    res = [{"rows": [{"year_month": "2026-08", "platform": "Instagram", "dept_scope": "connected"}],
+            "sql": "FROM `p.news_dept_social.agg_news_dept_daily_traffic_monthly` WHERE dept_scope = 'connected'"}]
+    notes = build_notes(res, TODAY)
+    assert any("2026-09-29" in n and "不是 0" in n for n in notes)
+    assert any(n.startswith("Connected 的 IG") for n in unsaid(notes, "Connected 的 IG 已停更。"))
+    assert not any(n.startswith("Connected 的 IG") for n in unsaid(notes, "9/29 起暫停收集每日流量。"))
+
+
 def test_current_month_and_scope_line():
     res = [{"rows": [{"date": "2026-10-03", "platform": "X", "dept_scope": "newsroom"}],
             "sql": "SELECT * FROM `p.news_dept_social.fct_daily_traffic` WHERE dept_scope = 'newsroom' AND platform = 'X'"}]
@@ -86,6 +96,24 @@ def test_video_layer_coverage_before_2026():
     fb_only = [{"rows": [{"publish_date": "2025-06-13", "platform": "Facebook"}],
                 "sql": "FROM `p.news_dept_social.fct_social_post_performance`"}]
     assert any(n.startswith("影片層各平台起始日") for n in build_notes(fb_only, TODAY))
+
+
+def test_period_from_year_columns_and_sql():
+    # 實測 2026-11-02：「新聞部 2025 年和 2026 年的影片層觀看數比較」，agent 用 EXTRACT(YEAR ...) IN (2025, 2026)，
+    # 結果只有 publish_year（2025.0），原本判斷不出期間，影片層起始日的提醒不會觸發
+    by_year = [{"rows": [{"publish_year": 2025.0, "platform": "Facebook"}, {"publish_year": 2026.0, "platform": "YouTube"}],
+                "sql": "SELECT EXTRACT(YEAR FROM month_start) AS publish_year FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    assert any(n.startswith("影片層各平台起始日") for n in build_notes(by_year, TODAY))
+    assert "2025-01-01 ～" in scope_line(by_year)
+    # 沒有回傳列時從 SQL 的年份條件推期間
+    sql_only = [{"rows": [], "sql": "SELECT platform FROM `p.news_dept_social.fct_social_post_performance` "
+                                    "WHERE platform = 'Facebook' AND EXTRACT(YEAR\n   FROM publish_date) = 2025"},
+                {"rows": [{"platform": "Facebook", "views": 1.0}], "sql": ""}]
+    assert any(n.startswith("影片層各平台起始日") for n in build_notes(sql_only, TODAY))
+    # 2026 年內的年份查詢不提醒
+    in_2026 = [{"rows": [{"publish_year": 2026.0, "platform": "Facebook"}, {"publish_year": 2026.0, "platform": "YouTube"}],
+                "sql": "FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    assert not any(n.startswith("影片層各平台起始日") for n in build_notes(in_2026, TODAY))
 
 
 def test_video_layer_coverage_not_triggered():
