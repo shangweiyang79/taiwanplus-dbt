@@ -52,7 +52,32 @@ def _dates(rows):
         if isinstance(ym, str) and re.fullmatch(r"\d{4}-\d{2}", ym):
             y, m = map(int, ym.split("-"))
             out += [dt.date(y, m, 1), dt.date(y, m, calendar.monthrange(y, m)[1])]
+        # 依年份彙總的結果（例如 EXTRACT(YEAR ...) AS publish_year，CA 回傳的數字常是 2025.0）擴成整年
+        for key in ("year", "publish_year"):
+            y = _year(r.get(key))
+            if y:
+                out += [dt.date(y, 1, 1), dt.date(y, 12, 31)]
     return out
+
+
+def _year(v):
+    try:
+        y = int(float(v))
+    except (TypeError, ValueError):
+        return None
+    return y if 2000 <= y <= 2100 else None
+
+
+# SQL 用年份篩選時（EXTRACT(YEAR FROM publish_date) = 2025 或 IN (2025, 2026)），結果可能沒有日期欄位
+_SQL_YEAR = re.compile(r"EXTRACT\s*\(\s*YEAR\s+FROM\s+[\w.`]+\s*\)\s*(?:=\s*(\d{4})|IN\s*\(([\d,\s]+)\))",
+                       re.IGNORECASE)
+
+
+def _sql_years(sql):
+    years = []
+    for eq, in_list in _SQL_YEAR.findall(sql):
+        years += [int(y) for y in re.findall(r"\d{4}", eq or in_list)]
+    return [{"year": y} for y in years]
 
 
 def _facts(results):
@@ -65,7 +90,8 @@ def _facts(results):
     tables = sorted(set(re.findall(r"news_dept_social\.(\w+)", sql)))
     # 結果沒有日期欄位時（例如 WHERE year_month = '2026-05'），改從 SQL 的日期字串推期間
     dates = _dates(rows) or _dates([{"year_month": m} for m in re.findall(r"'(\d{4}-\d{2})'", sql)]
-                                   + [{"date": d} for d in re.findall(r"'(\d{4}-\d{2}-\d{2})'", sql)])
+                                   + [{"date": d} for d in re.findall(r"'(\d{4}-\d{2}-\d{2})'", sql)]
+                                   + _sql_years(sql))
     return platforms, scopes, tables, (min(dates), max(dates)) if dates else None
 
 

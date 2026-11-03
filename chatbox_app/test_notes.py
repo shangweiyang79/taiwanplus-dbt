@@ -88,6 +88,24 @@ def test_video_layer_coverage_before_2026():
     assert any(n.startswith("影片層各平台起始日") for n in build_notes(fb_only, TODAY))
 
 
+def test_period_from_year_columns_and_sql():
+    # 實測 2026-11-02：「新聞部 2025 年和 2026 年的影片層觀看數比較」，agent 用 EXTRACT(YEAR ...) IN (2025, 2026)，
+    # 結果只有 publish_year（2025.0），原本判斷不出期間，影片層起始日的提醒不會觸發
+    by_year = [{"rows": [{"publish_year": 2025.0, "platform": "Facebook"}, {"publish_year": 2026.0, "platform": "YouTube"}],
+                "sql": "SELECT EXTRACT(YEAR FROM month_start) AS publish_year FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    assert any(n.startswith("影片層各平台起始日") for n in build_notes(by_year, TODAY))
+    assert "2025-01-01 ～" in scope_line(by_year)
+    # 沒有回傳列時從 SQL 的年份條件推期間
+    sql_only = [{"rows": [], "sql": "SELECT platform FROM `p.news_dept_social.fct_social_post_performance` "
+                                    "WHERE platform = 'Facebook' AND EXTRACT(YEAR\n   FROM publish_date) = 2025"},
+                {"rows": [{"platform": "Facebook", "views": 1.0}], "sql": ""}]
+    assert any(n.startswith("影片層各平台起始日") for n in build_notes(sql_only, TODAY))
+    # 2026 年內的年份查詢不提醒
+    in_2026 = [{"rows": [{"publish_year": 2026.0, "platform": "Facebook"}, {"publish_year": 2026.0, "platform": "YouTube"}],
+                "sql": "FROM `p.news_dept_social.agg_news_dept_social_monthly`"}]
+    assert not any(n.startswith("影片層各平台起始日") for n in build_notes(in_2026, TODAY))
+
+
 def test_video_layer_coverage_not_triggered():
     # 每日流量、2026 年內、或只查 IG 都不提醒
     daily = [{"rows": [{"year_month": "2025-09", "platform": "Facebook"}, {"year_month": "2025-09", "platform": "YouTube"}],
