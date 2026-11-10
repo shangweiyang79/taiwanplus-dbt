@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: stg_youtube__shorts
+    description: >
+      一列 = 一支 YouTube Short，是判斷「這支影片是不是 Shorts」的唯一入口。
+      名單 = API 週更名單（YouTube_data.video_metadata，新聞部 4 個頻道，每週一更新）∪ 活頁簿清單（social_hub.yt_shorts，
+      News / Explains，2024 起的歷史）。分類欄位只來自活頁簿，每月 5 號之後才補上，所以當月的 Shorts 分類為 NULL。
+    columns:
+      - name: video_id
+        data_tests: [unique, not_null]
+      - name: channel_key
+        description: news / explains / talks / connected。只在 API 名單裡的才有；活頁簿獨有的列為 NULL。
+      - name: dept_scope
+        description: newsroom / talks / connected。活頁簿獨有的列（2025 以前或私人影片）為 NULL。
+      - name: publish_date_tpe
+        description: 台北時間的發布日，來自 API 名單。
+      - name: new_category
+        description: Shorts 的主題分類（只有 Newsroom）。NULL = 還沒分類（當月）或不在活頁簿。
+      - name: bite_reel
+        description: NULL = 尚未判定，不是「不是 bite reel」。比較時母體要用 IS NOT NULL。
+      - name: is_labelled
+        description: 是否已有活頁簿的分類列。
+      - name: list_source
+        description: >
+          both = 兩邊都有；api_only = 只在 API 名單（多半是當月、還沒貼回活頁簿，或 Talks / Connected）；
+          workbook_only = 只在活頁簿（2025 以前、私人或已刪除的影片）。
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['both', 'api_only', 'workbook_only']

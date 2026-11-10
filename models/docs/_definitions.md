@@ -153,7 +153,7 @@ post_map 和主題分類只涵蓋 Newsroom，所以 Talks / Connected 的 vod_id
 
 其他注意事項：
 - impressions / ctr 只有 YouTube 有；X 沒有觀看時長。
-- Talks / Connected 的 YouTube Shorts 目前無法辨識（yt_shorts 清單只涵蓋 TaiwanPlus News 與 Taiwan Explained），orientation 會是 'video'。
+- YouTube 的 orientation（shorts / video）來自每週更新的 Shorts 名單，涵蓋 Newsroom、Talks、Connected 四個頻道（2026-11-10 起；之前 Talks / Connected 的 Shorts 一律算成 'video'）。名單每週一更新，當週剛發布的 Shorts 最多晚一週才被辨識。
 - YouTube 資料只從 2026-01-01 起；IG 從 2023 年起；X 早期月份可能不完整。
 - FB 從 2024-01-01 起：2024–2025 來自 2026-11-02 匯出的 Meta 後台檔（凍結快照，不再更新，沒有 vod_id／主題分類），2026 起每天更新。
 {% enddocs %}

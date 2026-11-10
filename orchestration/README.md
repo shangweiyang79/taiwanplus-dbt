@@ -22,6 +22,13 @@ flowchart LR
     end
 ```
 
+## 上游：YouTube Shorts 名單週更（yt-weekly，不在這個 repo）
+
+`YouTube_data.video_metadata` 由 Cloud Run Job `yt-weekly` 寫入，原始碼在 `analytics_pipeline/news_youtube_scrape/cloudrun_yt_weekly/`。
+- **怎麼寫入**：每週一 09:00、每月 4 號 10:00 用 YouTube Data / Analytics API MERGE，SA 是 `yt-weekly`。
+- **誰讀**：dbt 只透過 `stg_youtube__shorts` 讀它，判斷哪些影片是 Shorts；source freshness 是每週規則（8 天警告 / 14 天報錯）。
+- **出問題時**：freshness 報錯，代表 job 連續兩週沒成功，多半是 OAuth token 失效。處理方式見那個資料夾的 README「重新授權」。
+
 ## YouTube owner 事件驅動鏈
 
 YouTube 內容擁有者報表（BQ Data Transfer）沒有固定的「跑完」時間：每天 09:30 的排程執行通常沒有新資料，報表日 D 的資料第一次進來落在 **D+2 的 13:37–23:51**（2026-10 觀察 11 天），之後 D+3 上午還會再被修正重寫。原本三個 BQ 排程查詢用固定時間（09:30 / 09:50 / 13:00）去猜，結果每天都比資料早到一步，最新一天要等到隔天才進衍生表；`daily_detailed_summary` 甚至在報表進來前就跑完。

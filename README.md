@@ -8,7 +8,7 @@
 flowchart TB
     subgraph EL["① Extract & Load — sibling repos (Python + Cloud Run)"]
         direction LR
-        YT["YouTube Reporting API<br/>+ BQ Data Transfer"]
+        YT["YouTube Reporting API<br/>+ BQ Data Transfer<br/>+ weekly Data/Analytics API job"]
         IG["Instagram<br/>Graph API"]
         FB["Facebook<br/>Insights"]
         XS["X analytics<br/>exports"]
@@ -21,7 +21,7 @@ flowchart TB
     subgraph DBT["② Transform — dbt on BigQuery (this repo)"]
         direction LR
         SEED["seeds<br/>account & metric mappings"]
-        STG["staging<br/>11 models"]
+        STG["staging<br/>12 models"]
         INT["intermediate<br/>2 models"]
         MART["marts · news_dept_social<br/>daily traffic + video level"]
         COMPAT["social_hub<br/>13 compat views"]
@@ -51,8 +51,8 @@ flowchart TB
 - **Zero-downtime migration.** Rebuilt 13 legacy `social_hub` views in dbt **under the same names**. A row-level reconcile script proved the outputs identical (only float noise < 1e-11 and 2 rows of `APPROX_QUANTILES` approximation differed), so **Looker Studio needed no rewiring**.
 - **Resolved a metric ambiguity.** "Views" meant two different things in different reports. I split it into **daily traffic** (the KPI: views that *happened* in the period) and **video level** (for root cause: *cumulative* views by publish date). For the same unit and month, the two can differ by **~2×**, which is why the reports used to disagree.
 - **Fixed silent data bugs.** Summing the raw Instagram snapshot table **inflates views 100×+**. The account-level daily deltas also **went negative** whenever the API dropped reels (at one point more than half of an account's reels vanished from the feed in a single day). Per-reel snapshot deltas with a running max fixed it: one month's watch time went from a **six-figure negative** number to the correct positive value.
-- **Tested and documented.** **43 tests** (32 generic + 11 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
-- **Automated, keyless operations.** Every PR is built and tested in an isolated dataset; merging to `main` deploys prod with no manual step. Daily checks run freshness and every test against prod, and an event-driven Workflow refreshes YouTube data as soon as it lands instead of guessing a schedule. All of it runs on per-job least-privilege service accounts through Workload Identity Federation, with no keys ([§4](#4-data-quality--testing)).
+- **Tested and documented.** **48 tests** (37 generic + 11 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
+- **Automated, keyless operations.** Every PR is built and tested in an isolated dataset; merging to `main` deploys prod with no manual step. Daily checks run freshness and every test against prod, an event-driven Workflow refreshes YouTube data as soon as it lands instead of guessing a schedule, and a weekly Cloud Run Job replaced a monthly hand-built CSV upload for the YouTube Shorts list. All of it runs on per-job least-privilege service accounts through Workload Identity Federation, with no keys ([§4](#4-data-quality--testing)).
 - **Semantic layer → AI.** 2 semantic models, 17 metrics and 2 saved queries are compiled into an AI context file. A Conversational Analytics agent plus a Streamlit chatbox (Cloud Run behind IAP, **verified read-only** service account) passes **20/20** eval questions (10 questions × original/paraphrase) with a **median latency of 20.4 s**. A number checker flags any figure in the answer that is not in the query result.
 - **Honest forecasting backtest.** Multi-cutoff backtest of **TimesFM vs ARIMA_PLUS vs naive**: TimesFM wins on X (**11%** 28-day error vs 21% naive), but **naive beats it on Newsroom YouTube** (18% vs 27%). So forecasts are used as a reference in the biweekly report, never as a KPI.
 
@@ -107,7 +107,7 @@ flowchart LR
 
 | Layer | Models | Materialization | Prod dataset | Purpose |
 |---|---|---|---|---|
-| Staging | 11 | view | `dbt_internal` | One model per raw table: rename, cast, dedupe snapshots, add `dept_scope` |
+| Staging | 12 | view | `dbt_internal` | One model per raw table: rename, cast, dedupe snapshots, add `dept_scope`. `stg_youtube__shorts` is the single "is this a Short" entry point (weekly API list ∪ monthly labelled list) |
 | Intermediate | 2 | view | `dbt_internal` | Union the 4 platforms into one long table; dedupe the CMS post map |
 | Marts — **daily traffic** | `fct_daily_traffic`, `agg_news_dept_daily_traffic_monthly` | view | `news_dept_social` | Day × unit × platform × content type. **Overall KPI.** |
 | Marts — **video level** | `fct_social_post_performance`, `agg_news_dept_social_monthly` | view | `news_dept_social` | One row per video post. **Root cause**: which videos/topics performed. |
@@ -179,9 +179,9 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 
 ## 4. Data quality & testing
 
-**43 dbt tests** run with every `dbt build`.
+**48 dbt tests** run with every `dbt build`.
 
-- **32 generic tests:** `unique` / `not_null` on every grain key, and `accepted_values` on `dept_scope`, `platform` and `content_type`. Source tests cover upstream keys too.
+- **37 generic tests:** `unique` / `not_null` on every grain key, and `accepted_values` on `dept_scope`, `platform` and `content_type`. Source tests cover upstream keys too.
 - **11 singular tests:**
 
 | Test | What it guards |
@@ -194,7 +194,7 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 | [`assert_dept_platform_in_dept_accounts`](tests/assert_dept_platform_in_dept_accounts.sql) | Every unit × platform in the data is registered in the governed seed |
 | [`assert_youtube_channels_match_video_news_broad`](tests/assert_youtube_channels_match_video_news_broad.sql) | The channel → unit seed agrees with the upstream YouTube table |
 | [`assert_post_map_post_has_single_vod`](tests/assert_post_map_post_has_single_vod.sql) | A social post never maps to two CMS videos (prevents fan-out) |
-| [`assert_classified_vod_not_shorts`](tests/assert_classified_vod_not_shorts.sql) | Topic-classified long-form videos are not Shorts |
+| [`assert_classified_vod_not_shorts`](tests/assert_classified_vod_not_shorts.sql) | Topic-classified long-form videos are not Shorts. Checked against the weekly API Shorts list, so a Short that the monthly classifier treated as long-form is caught within a week |
 | [`assert_vod_publish_date_matches_vod_id`](tests/assert_vod_publish_date_matches_vod_id.sql) | CMS IDs and publish dates are consistent |
 | [`assert_fb_history_no_overlap`](tests/assert_fb_history_no_overlap.sql) | The frozen 2024–2025 Facebook history table and the live 2026+ table never share a video (warn; staging already keeps the live row) |
 
@@ -202,6 +202,7 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 - **Documentation as data:** `persist_docs` writes every model and column description into BigQuery, so BigQuery's own Gemini features read the same definitions as humans do.
 - **Daily checks in prod:** Cloud Scheduler triggers a Cloud Run Job every day after ingestion. The job runs `dbt source freshness` and `dbt test` against prod and emails an alert if either fails. All models are views, so the data is always current and nothing needs a daily rebuild. What changes day to day is the data itself, so the job only checks it. It runs as a **read-only** service account and cannot modify prod.
 - **Event-driven upstream refresh:** the YouTube content-owner reports have no fixed "done" time. Day D first lands on D+2 at any time between 13:37 and 23:51, then gets corrected again later. Fixed-time scheduled queries were therefore always a step behind. Now each transfer run publishes a Pub/Sub notification. Eventarc starts a Cloud Workflow, which checks whether the owner tables are newer than the derived tables. Only when they are does it refresh the derived YouTube tables (SQL versioned as stored procedures in [`orchestration/sql/`](orchestration/sql/)) and then run the dbt checks. The newest YouTube day now reaches the models about a day earlier.
+- **Weekly upstream Shorts list:** BigQuery's YouTube transfer reports have no Shorts flag, and duration can't tell a Short from a short clip. Whether a video is a Short only reached the warehouse once a month, through a CSV built by hand and pasted into a workbook. So the current month's vertical-video numbers were always low. A Cloud Run Job (`yt-weekly`, in the sibling repo) now pulls the YouTube Analytics `creatorContentType` and the Data API metadata every Monday and MERGEs them into `YouTube_data.video_metadata`. It also runs on the 4th, so the monthly topic classifier finds last month complete. `stg_youtube__shorts` unions that list with the labelled workbook list (which keeps the history back to 2024 and private videos the API can't see). It was reconciled before cut-over: October 2026's 70 Shorts matched the old list exactly, and title/tags/description matched the old CSV on 491/491 rows. The classifier now reads its inputs from BigQuery and refuses to run if the weekly pull hasn't happened since month end. The source has the weekly freshness rule.
 - **CI:** GitHub Actions builds the whole project into an isolated `dbt_ci` dataset on every PR and runs every test, plus the chatbox unit tests.
 - **CD:** merging to `main` deploys everything with no manual step: `dbt build --target prod`, the YouTube stored procedures and Workflow, and the daily-checks image (tagged with the commit SHA). The image is swapped only after the prod build succeeds, so new tests never run against views that have not been rebuilt yet. Every deploy pushes the whole of `main` and is idempotent, so manual drift in the console is reverted on the next merge.
 - **No keys, least privilege:** CI/CD authenticates through **Workload Identity Federation**, so no service account key exists anywhere. Each job runs as its own service account: the prod build can write only the three dbt datasets, the infra deployer can touch only the one Cloud Run Job, the Workflow and the YouTube summary dataset. Deploy identities are bound to the `main` branch's OIDC subject (GitHub's immutable form, with numeric owner and repo IDs), so PRs, other branches and forks cannot obtain them. Details: [`orchestration/README.md`](orchestration/README.md).
@@ -300,7 +301,7 @@ python scripts/run_eval_reference.py    # reference answers for the eval questio
 
 ## 8. Tech stack
 
-`dbt` (BigQuery adapter, `persist_docs`, semantic layer YAML spec) · `BigQuery` · `BigQuery ML` (ARIMA_PLUS, TimesFM) · `Python` (`google-cloud-bigquery`) · `Conversational Analytics API` (Data Agent) · `Gemini Flash` · `Streamlit` · `Cloud Run` · `Identity-Aware Proxy` · `Artifact Registry` / `Cloud Build` · `Cloud Logging` · `Looker Studio` · `GitHub Actions` · `Workload Identity Federation` · `Docker` · `Cloud Scheduler` · `Cloud Workflows` · `Eventarc` · `Pub/Sub` · `Cloud Monitoring`
+`dbt` (BigQuery adapter, `persist_docs`, semantic layer YAML spec) · `BigQuery` · `BigQuery ML` (ARIMA_PLUS, TimesFM) · `Python` (`google-cloud-bigquery`, `google-api-python-client`) · `YouTube Data / Analytics API` · `Secret Manager` · `Conversational Analytics API` (Data Agent) · `Gemini Flash` · `Streamlit` · `Cloud Run` · `Identity-Aware Proxy` · `Artifact Registry` / `Cloud Build` · `Cloud Logging` · `Looker Studio` · `GitHub Actions` · `Workload Identity Federation` · `Docker` · `Cloud Scheduler` · `Cloud Workflows` · `Eventarc` · `Pub/Sub` · `Cloud Monitoring`
 
 ---
 
@@ -316,4 +317,4 @@ The TaiwanPlus data is **proprietary and not included**. This repo contains only
 - **Slim CI/CD** (`state:modified+` with `--defer`) once full builds get slow. Today a full build takes about a minute, so it is not worth maintaining a prod manifest yet.
 - **Snapshots** for slowly changing mappings (account ownership, channel → unit).
 - **Query the semantic layer directly** (dbt platform) instead of compiling metrics into an AI context file.
-- **Shorts detection for Talks / Connected**, which the upstream Shorts list doesn't cover yet.
+- **Retire the workbook round-trip for Shorts labels.** The classifier already writes Shorts topics and bite-reel flags to BigQuery, so `yt_shorts` could be rebuilt in dbt from those plus an override table for hand-filled values, instead of being pasted into a workbook and re-uploaded each month.

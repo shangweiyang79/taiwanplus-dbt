@@ -2,8 +2,8 @@
 -- 原本的 social_hub.v_metrics_youtube 讀 video_news_livestream（只有 newsroom），
 -- 這裡改讀 video_news_broad；newsroom 部分兩者實測完全一致。
 --
--- orientation 靠 yt_shorts 清單判斷，不能用長度判斷（Shorts 與一般新聞短片的長度分布完全重疊）。
--- yt_shorts 目前只涵蓋 TaiwanPlus News / Taiwan Explained，Talks / Connected 的 Shorts 會被當成 'video'。
+-- orientation 靠 stg_youtube__shorts 名單判斷，不能用長度判斷（Shorts 與一般新聞短片的長度分布完全重疊）。
+-- 名單每週更新、涵蓋新聞部 4 個頻道（含 Talks / Connected），見 stg_youtube__shorts。
 select
   y.video_id                                          as join_key,
   'YouTube'                                           as platform,
@@ -30,5 +30,5 @@ select
   y.video_length,
   y.time_published
 from {{ source('youtube', 'video_news_broad') }} y
-left join {{ source('social_hub', 'yt_shorts') }} s
+left join {{ ref('stg_youtube__shorts') }} s
   on y.video_id = s.video_id

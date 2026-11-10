@@ -10,6 +10,7 @@
 --      否則同一支影片會因為跨平台差幾小時而落在不同月份。
 --   4. X 不在這裡：沒有直式 / 橫式資訊。
 --   5. 各平台「觀看」定義不同，跨平台比 views 只能當粗略量級看。
+--   6. Shorts 名單每週更新，分類每月 5 號之後才補上：當月的 Short 會先出現、new_category 為 NULL。
 with metrics as (
   select join_key, platform, views, watch_time_hours, engagements
   from {{ ref('int_platform_metrics_unioned') }}
@@ -43,7 +44,7 @@ select
   x.match_method in ('self', 'post_map')                  as is_confirmed,
   m.join_key is not null                                  as has_metrics
 from {{ source('social_hub', 'vertical_crosswalk') }} x
-join {{ source('social_hub', 'yt_shorts') }} s
+join {{ ref('stg_youtube__shorts') }} s
   on s.video_id = x.yt_video_id
 join {{ ref('stg_youtube__videos') }} y
   on y.join_key = x.yt_video_id
