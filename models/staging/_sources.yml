@@ -50,6 +50,30 @@ sources:
           雲端分類 pipeline（Cloud Run news-classify-monthly，每月 5 號）寫入的 YouTube 影片主題分類，
           以 YouTube video_id 為主鍵。source = 'shorts_gemini' 的是 Shorts，分類另由 social_hub.yt_shorts 提供。
 
+  - name: youtube_data
+    database: "{{ target.database }}"
+    schema: YouTube_data
+    tables:
+      - name: video_metadata
+        description: >
+          新聞部 4 個 YouTube 頻道（News、Explains、Talks、Connected）的影片清單與文字欄位，一列一支影片。
+          Cloud Run Job `yt-weekly`（news_youtube_scrape/cloudrun_yt_weekly）每週一、每月 4 號用 YouTube Data / Analytics API
+          回看 40 天並 MERGE，不刪資料；2026-01-01 起回補。
+          Shorts 名單以 creator_content_type = 'shorts' 為準（Analytics creatorContentType；owner / channel 報表都沒有這個欄位）。
+          下游請讀 stg_youtube__shorts，不要直接讀這張。
+        config:
+          loaded_at_field: last_seen_at
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
+          - name: creator_content_type
+            description: >
+              Analytics creatorContentType 轉小寫：shorts / videoondemand / livestream / posts。
+              NULL = 剛發布、Analytics 還沒有數據，下次執行會補上。
+
   - name: youtube_owner
     database: "{{ target.database }}"
     schema: youtube_taiwanplus_owner
@@ -201,9 +225,10 @@ sources:
             error_after: {count: 14, period: day}
       - name: yt_shorts
         description: >
-          YouTube Shorts 清單與分類（yt_shorts_bq.py 每月從活頁簿 shorts 分頁整表覆蓋）。
-          是判斷 YouTube 影片是否為 Shorts 的唯一依據，不能用影片長度判斷。
-          目前只涵蓋 TaiwanPlus News 與 Taiwan Explained 兩個頻道。
+          YouTube Shorts 的分類（new_category / bite_reel / tags），yt_shorts_bq.py 每月從活頁簿 shorts 分頁整表覆蓋。
+          只涵蓋 News 與 Explains，但有 2024 起的歷史與 API 看不到的私人影片。
+          「是不是 Shorts」請讀 stg_youtube__shorts（本表 ∪ YouTube_data.video_metadata 的 API 週更名單），
+          不要直接讀這張：它每月才更新，當月的 Shorts 要到下個月 5 號之後才會出現。
         columns:
           - name: video_id
             data_tests: [unique, not_null]
@@ -212,4 +237,6 @@ sources:
       - name: vod_content_category
         description: CMS 匯出的 VOD content_category（vod_content_category_bq.py 不定期上傳）。
       - name: vertical_crosswalk
-        description: 直式影片跨平台推論配對（vertical_crosswalk.py 每月整表覆蓋）。
+        description: >
+          直式影片跨平台推論配對（vertical_crosswalk.py 整表覆蓋）。
+          2026-11 起由 Cloud Run Job `yt-weekly` 每週重建，Shorts 名單用 API 週更名單 ∪ yt_shorts。
