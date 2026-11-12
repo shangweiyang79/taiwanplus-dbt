@@ -5,6 +5,7 @@ logs/
 /profiles.yml
 *.keyfile.json
 service_account*.json
+ivory-airfoil-418408-8525668a8a75.json
 .env
 .venv/
 __pycache__/
@@ -21,3 +22,6 @@ ai_context/ca_agent/eval_results/*.md
 !ai_context/ca_agent/eval_results/SUMMARY.md
 analyses/forecast_backtest_results.csv
 target_kc/
+
+# Google OAuth client secrets (downloaded from Console)
+client_secret_*.json

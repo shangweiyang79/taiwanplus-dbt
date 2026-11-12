@@ -45,7 +45,7 @@ questions:
       metric: traffic_views（YouTube Views），附 engaged views
       period: 上一個完整月份
     must_mention:
-      - 只算 Newsroom（TaiwanPlus News / Livestream / Explained 三個頻道）
+      - 只算 Newsroom（TaiwanPlus News / Livestream / Explains 三個頻道）
       - 是當月實際發生的觀看
     must_not:
       - 把 Talks 或 Connected 的 YouTube 算進去
@@ -55,6 +55,33 @@ questions:
       FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
+
+  # 2026-11-12 使用者回報：Explained 頻道改名 Explains 後，問「Explains 近期成效」回的是整個 Newsroom YouTube。
+  # 原因是表上沒有頻道欄位；已在 fct_daily_traffic / fct_social_post_performance 加 channel_name。
+  - id: q13_explains_recent
+    question: Explains 近期成效如何？
+    expected:
+      layer: 每日流量
+      scope: 只有 TaiwanPlus Explains 這個 YouTube 頻道（channel_name = 'TaiwanPlus Explains'）
+      metric: traffic_views（YouTube Views），附 engaged views
+      period: 最近三個完整月份
+    must_mention:
+      - 範圍是 TaiwanPlus Explains 單一 YouTube 頻道
+      - 逐月列出觀看數與 engaged views
+      - 期間跨過 2026-08-27 時，說明 Views 門檻放寬的影響
+    must_not:
+      - 用整個 Newsroom 的 YouTube（含 TaiwanPlus News / Livestream）回答
+      - 說找不到 Explains 或沒有頻道資料
+      - 用影片層回答總體成效
+    reference_sql: |
+      SELECT year_month, SUM(views) AS views, SUM(engaged_views) AS engaged_views,
+             SUM(watch_time_hours) AS watch_time_hours, COUNT(DISTINCT date) AS days_with_data
+      FROM `${GCP_PROJECT}.news_dept_social.fct_daily_traffic`
+      WHERE channel_name = 'TaiwanPlus Explains'
+        AND month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
+        AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
+      GROUP BY year_month
+      ORDER BY year_month
 
   - id: q3_talks_ig_engagement_rate
     question: Talks 今年 IG 的互動率是多少？
@@ -147,6 +174,32 @@ questions:
       FROM `${GCP_PROJECT}.news_dept_social.fct_social_post_performance`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
+      ORDER BY views DESC
+      LIMIT 5
+
+  # 2026-11-03 使用者回報：「上個月新聞部 Top 5 影片」只回 Newsroom 的 YouTube（套用了 q6 的範例查詢）。
+  # 使用者決定：沒指定單位 / 平台的影片排行，三單位四平台合併排序，只列前 5，附門檻不同的提醒
+  - id: q12_dept_top_videos
+    question: 上個月新聞部觀看數最高的 5 支影片是哪些？
+    expected:
+      layer: 影片層
+      scope: newsroom + talks + connected，四個平台合併成一個排行
+      metric: views（單則）
+      period: 上一個完整月份發布的影片
+    must_mention:
+      - 每支影片標示單位與平台
+      - 附上影片標題、發布日期與連結
+      - 各平台觀看門檻不同，跨平台排序只能參考
+      - 這是上個月發布的影片到今天的累計觀看
+    must_not:
+      - 只列 Newsroom 或只列 YouTube
+      - 改成各平台分開列各自的前 5
+      - 從每日流量或月彙總表回答（沒有單則影片）
+    reference_sql: |
+      SELECT dept_scope, platform, COALESCE(NULLIF(platform_title, ''), LEFT(caption, 100)) AS title,
+             publish_date, views, engaged_views, link
+      FROM `${GCP_PROJECT}.news_dept_social.fct_social_post_performance`
+      WHERE month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
       ORDER BY views DESC
       LIMIT 5
 

@@ -35,8 +35,9 @@ class ChatClient:
         return conv.name
 
     def ask(self, conversation, question, thinking=False):
-        # 實測：FAST 模式常忽略 system_instruction 的語言規定，中文問題會用英文回答，所以在訊息裡再講一次
-        text = question + ("\n\n（請用繁體中文回答）" if _CJK.search(question) else "")
+        # 實測：FAST 模式常忽略 system_instruction 的語言規定，所以在訊息裡再講一次。
+        # 兩個方向都會出錯：中文問題用英文答、英文問題用中文答（2026-11-03 英文 FB 範例題實測）
+        text = question + ("\n\n（請用繁體中文回答）" if _CJK.search(question) else "\n\n(Please answer in English.)")
         request = gda.ChatRequest(
             parent=PARENT,
             messages=[gda.Message(user_message=gda.UserMessage(text=text))],
@@ -98,7 +99,7 @@ def fix_month_axis(spec):
                     e["timeUnit"] = "utcyearmonth"
                     if channel in ("x", "y"):
                         e["type"] = "ordinal"
-                        e.setdefault("title", "月份")  # 不給的話預設標題會多出「(year-month)」
+                        e.setdefault("title", "月份 Month")  # 不給的話預設標題會多出「(year-month)」
                         e["axis"] = {**(e.get("axis") or {}), "format": "%Y-%m", "formatType": "time", "labelAngle": 0}
                     else:
                         e["format"] = "%Y-%m"

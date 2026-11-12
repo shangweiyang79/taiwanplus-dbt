@@ -42,8 +42,15 @@ HEADER = """\
 GLOSSARY = [
     ("新聞部", "Newsroom + Talks + Connected 三個單位，dept_scope IN ('newsroom','talks','connected')，三個都要算。",
      ["新聞部門", "news department", "news dept"]),
-    ("Newsroom", "新聞台，dept_scope = 'newsroom'。YouTube 含 TaiwanPlus News / Livestream / Taiwan Explained 三個頻道。",
+    ("Newsroom", "新聞台，dept_scope = 'newsroom'。YouTube 含 TaiwanPlus News / TaiwanPlus Livestream / TaiwanPlus Explains 三個頻道。",
      ["新聞台", "TaiwanPlus News"]),
+    ("Explains", "單一 YouTube 頻道，channel_name = 'TaiwanPlus Explains'（屬 newsroom，只有 YouTube）。"
+     "總體成效查 fct_daily_traffic 篩 channel_name 依 year_month 加總；影片查 fct_social_post_performance 篩 channel_name。"
+     "不可用整個 Newsroom 或 dept_scope = 'newsroom' 代替。",
+     ["TaiwanPlus Explains", "Explained", "Taiwan Explained", "Taiwan Explained by TaiwanPlus", "Explains 頻道"]),
+    ("YouTube 頻道", "欄位 channel_name（只有 YouTube 有值）：TaiwanPlus News、TaiwanPlus Explains、TaiwanPlus Livestream、"
+     "Taiwan Talks、CONNECTED on TaiwanPlus。問單一頻道時用 channel_name 篩選，月彙總表沒有這欄，要用 fct_daily_traffic。",
+     ["頻道", "channel", "YT 頻道", "Livestream"]),
     ("Talks", "dept_scope = 'talks'，平台只有 YouTube 與 Instagram。", ["Taiwan Talks"]),
     ("Connected", "dept_scope = 'connected'，YouTube 持續經營；Instagram 於 2026-07-04 停更。", ["CONNECTED"]),
     ("社群成效", "沒指定指標時 = 每日流量的觀看數（agg_news_dept_daily_traffic_monthly.views），各平台分開列。",

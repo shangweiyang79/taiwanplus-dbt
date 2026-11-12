@@ -14,7 +14,8 @@ select
   cast(null as int64)                               as paid_views,
   cast(null as int64)                               as engaged_views,
   cast(null as float64)                             as watch_time_hours,
-  'story_by_publish_date'                           as source_method
+  'story_by_publish_date'                           as source_method,
+  cast(null as string)                              as channel_name    -- 只有 YouTube 分頻道
 from {{ source('instagram', 'ig_stories_pivot_daily') }}
 {% if not loop.last %}union all{% endif %}
 {% endfor %}

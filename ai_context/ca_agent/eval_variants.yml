@@ -8,6 +8,9 @@ variants:
   q2_newsroom_yt_last_month:
     paraphrase: 上月新聞台的 YouTube 一共有幾次觀看？
     en: How many YouTube views did Newsroom get last month?
+  q13_explains_recent:
+    paraphrase: TaiwanPlus Explains 頻道最近幾個月表現怎麼樣？
+    en: How has the Explains channel performed recently?
   q3_talks_ig_engagement_rate:
     paraphrase: 2026 年以來 Taiwan Talks 的 Instagram 互動率大概多少？
     en: What is Talks' Instagram engagement rate so far this year?
@@ -20,6 +23,9 @@ variants:
   q6_top_videos:
     paraphrase: 列出新聞台上個月發布、YouTube 觀看最多的前五支影片
     en: What were Newsroom's top 5 YouTube videos by views last month?
+  q12_dept_top_videos:
+    paraphrase: 上個月新聞部Top 5影片 包含Title 發布日期 連結
+    en: What were the news department's top 5 videos by views last month?
   q7_ytd_total:
     paraphrase: 2026 年 1 月到現在，新聞部社群累積觀看是多少？
     en: How many total views has the news department had year to date?

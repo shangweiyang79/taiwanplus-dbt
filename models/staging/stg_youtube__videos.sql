@@ -20,6 +20,9 @@ select
   date(y.time_published)                              as platform_published_date,
   if(s.video_id is not null, 'shorts', 'video')       as orientation,
   s.video_id is not null                              as is_vertical,
+  -- 頻道名稱取自 seed youtube_channels（與每日流量同一份），不用 metadata 的 channel_display_name，
+  -- 兩層才不會在頻道改名時對不起來；改名由 assert_youtube_channels_match_video_news_broad 抓。
+  c.channel_name,
   y.video_url                                         as link,
   cast(null as string)                                as caption,
   -- 唯一自己組出來的網址：YouTube 穩定公開、不會過期的縮圖格式
@@ -32,3 +35,5 @@ select
 from {{ source('youtube', 'video_news_broad') }} y
 left join {{ ref('stg_youtube__shorts') }} s
   on y.video_id = s.video_id
+left join {{ ref('youtube_channels') }} c
+  on y.channel_id = c.channel_id

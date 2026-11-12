@@ -85,7 +85,7 @@ BEGIN
     meta.channel_id IN (
       'UCCJBSLNtozkO-NqjpPZujiQ',  -- TaiwanPlus News
       'UC7c6rvyAZLpKGk8ttVnpnLA',  -- TaiwanPlus Livestream
-      'UComl1gAjeqAAiRR6s3ae73w',  -- Taiwan Explained by TaiwanPlus
+      'UComl1gAjeqAAiRR6s3ae73w',  -- TaiwanPlus Explains
       'UCSyJ1WvirdmrMY8rpnT41LA',  -- Taiwan Talks
       'UC1oUAE7Bj5o6zEGm0Hq4BdA')  -- CONNECTED on TaiwanPlus
     AND PARSE_TIMESTAMP('%Y/%m/%d %H:%M:%S', meta.time_published) >= '2026-01-01'

@@ -46,5 +46,6 @@ select
   permalink                                       as link,
   description                                     as caption,
   -- Meta CDN 的簽章網址，會過期
-  thumbnail_url
+  thumbnail_url,
+  cast(null as string)                            as channel_name   -- 只有 YouTube 分頻道
 from videos

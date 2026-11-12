@@ -45,6 +45,9 @@ AUTHORIZED = {
     "X_data": ["dbt_internal"],
     "youtube_channel_summary": ["dbt_internal", "social_hub"],  # social_hub.vod_category 也讀它
     "youtube_taiwanplus_owner": ["dbt_internal"],
+    # 2026-11-10 起 stg_youtube__videos → stg_youtube__shorts 會讀週更名單 YouTube_data.video_metadata。
+    # 漏了這筆，chatbox 查影片層（fct_social_post_performance 及其彙總）會整個權限不足，不只 Shorts。
+    "YouTube_data": ["dbt_internal"],
 }
 # 2026-10-15 實測：同 dataset 內的巢狀 view（dbt_internal 的 int -> stg、Instagram_data 的 view）
 # 不需要自我授權；以上清單即為最小必要設定，verify_readonly.py 全部通過。

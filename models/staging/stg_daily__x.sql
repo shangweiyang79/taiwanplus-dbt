@@ -8,5 +8,6 @@ select
   cast(null as int64)                               as paid_views,
   cast(null as int64)                               as engaged_views,
   watch_time_hours,
-  'x_analytics'                                     as source_method
+  'x_analytics'                                     as source_method,
+  cast(null as string)                              as channel_name    -- 只有 YouTube 分頻道
 from {{ source('x', 'daily_traffic') }}

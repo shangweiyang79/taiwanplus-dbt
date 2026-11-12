@@ -36,7 +36,8 @@ with
     {%- else %}
     cast(null as string)                            as caption,
     cast(null as string)                            as thumbnail_url
-    {%- endif %}
+    {%- endif %},
+    cast(null as string)                            as channel_name   -- 只有 YouTube 分頻道
   from {{ source('instagram', a.table) }}
   where link is not null
   qualify row_number() over (partition by link order by data_date desc) = 1
