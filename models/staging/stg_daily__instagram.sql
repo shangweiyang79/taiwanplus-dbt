@@ -53,7 +53,8 @@ select
   v.paid_views,
   cast(null as int64)                               as engaged_views,
   w.watch_hours                                     as watch_time_hours,
-  if(coalesce(v.date, w.date) < {{ cutover }}, 'reel_snapshot_delta', 'api') as source_method
+  if(coalesce(v.date, w.date) < {{ cutover }}, 'reel_snapshot_delta', 'api') as source_method,
+  cast(null as string)                              as channel_name    -- 只有 YouTube 分頻道
 from views v
 full join wh w
   on v.date = w.date and v.dept_scope = w.dept_scope

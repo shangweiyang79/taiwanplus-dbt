@@ -15,6 +15,8 @@ select
   concat(m.platform, ':', m.join_key)               as post_uid,
   m.platform,
   m.dept_scope,
+  -- YouTube 頻道（TaiwanPlus News / Explains / Livestream / Taiwan Talks / CONNECTED）；其他平台為 NULL
+  m.channel_name,
   m.join_key                                        as post_key,
   m.link,
   -- 各平台自己的發布日，不是 VOD 的 publish_date

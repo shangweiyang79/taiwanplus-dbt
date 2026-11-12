@@ -26,6 +26,20 @@ models:
           type: primary
         data_tests: [unique, not_null]
 
+      - name: channel_name
+        description: "{{ doc('youtube_channel_name') }}"
+        dimension:
+          type: categorical
+          label: YouTube 頻道
+        data_tests:
+          - not_null:
+              config:
+                where: "platform = 'YouTube'"
+          - relationships:
+              arguments:
+                to: ref('youtube_channels')
+                field: channel_name
+
       - name: vod_id
         description: CMS 的 VOD ID。只有 Newsroom 且走過 CMS 發布流程的貼文才有，其餘為 NULL。
         entity:
@@ -282,7 +296,7 @@ models:
 
     columns:
       - name: traffic_uid
-        description: 唯一鍵，格式為 `日期:單位:平台:內容類型`。
+        description: 唯一鍵，格式為 `日期:單位:平台:內容類型`，YouTube 另加 `:頻道名稱`。
         entity:
           name: traffic
           type: primary
@@ -324,6 +338,19 @@ models:
           - accepted_values:
               arguments:
                 values: ['video', 'story']
+      - name: channel_name
+        description: "{{ doc('youtube_channel_name') }}"
+        dimension:
+          type: categorical
+          label: YouTube 頻道
+        data_tests:
+          - not_null:
+              config:
+                where: "platform = 'YouTube'"
+          - relationships:
+              arguments:
+                to: ref('youtube_channels')
+                field: channel_name
       - name: views
         description: >
           當天實際發生的觀看數，是總體成效的 KPI。YouTube / FB 含付費觀看；IG 2026-06-01 之前為逐支 reel 快照相減（通常比 API 偏高 10～20%）。

@@ -3,10 +3,17 @@
 
 - 問「新聞部」的社群成效時，三個單位都要算；只有明確說 Newsroom（新聞台）時才篩 `dept_scope = 'newsroom'`。
 - 各單位經營的平台：
-  - Newsroom：YouTube（TaiwanPlus News / TaiwanPlus Livestream / Taiwan Explained by TaiwanPlus）、Instagram、Facebook、X
+  - Newsroom：YouTube（TaiwanPlus News / TaiwanPlus Livestream / TaiwanPlus Explains）、Instagram、Facebook、X
   - Talks：YouTube（Taiwan Talks）、Instagram
   - Connected：YouTube（CONNECTED on TaiwanPlus）；Instagram 於 2026-07-04 停更，歷史資料保留，每日流量 2026-09-29 起暫停收集
 - 單位、平台、原表的完整對照見 seed `dept_accounts`。
+{% enddocs %}
+
+
+{% docs youtube_channel_name %}
+YouTube 頻道名稱，只有 YouTube 有值，其他平台為 NULL（每個單位只有一個帳號）。值來自 seed `youtube_channels`：
+`TaiwanPlus News`、`TaiwanPlus Explains`、`TaiwanPlus Livestream`（以上屬 newsroom）、`Taiwan Talks`（talks）、`CONNECTED on TaiwanPlus`（connected）。
+問單一頻道（例如「Explains 近期成效」）時用這欄篩選，不要用 `dept_scope = 'newsroom'` 代替。
 {% enddocs %}
 
 
@@ -70,7 +77,7 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 
 
 {% docs fct_daily_traffic %}
-一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story），新聞部每日流量的主表。
+一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story）× YouTube 頻道，新聞部每日流量的主表。YouTube 每個頻道各一列（`channel_name`），其他平台 `channel_name` 為 NULL。
 
 {{ doc('news_dept_definition') }}
 
@@ -89,6 +96,9 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | Newsroom、新聞台、TaiwanPlus News | `dept_scope = 'newsroom'` |
 | Talks、Taiwan Talks | `dept_scope = 'talks'` |
 | Connected、CONNECTED | `dept_scope = 'connected'` |
+| Explains、TaiwanPlus Explains（舊名 Taiwan Explained / Explained） | 單一 YouTube 頻道：`channel_name = 'TaiwanPlus Explains'`（屬 newsroom，只有 YouTube）。**不要用整個 Newsroom 代替** |
+| Livestream、TaiwanPlus Livestream | 單一 YouTube 頻道：`channel_name = 'TaiwanPlus Livestream'`（每日流量到 2026-08-05 為止） |
+| TaiwanPlus News 的 YouTube 頻道（明確說「頻道」） | 單一 YouTube 頻道：`channel_name = 'TaiwanPlus News'`；只說 TaiwanPlus News 時視為 Newsroom |
 | 沒指定平台 | 該範圍內所有平台（新聞部 = YouTube、Instagram、Facebook、X） |
 
 ### 判斷指標
@@ -112,10 +122,13 @@ YouTube 另有 `engaged_views`（Engaged views），計算方式接近 8/27 之�
 | 總體成效，但期間是自訂的（某幾週、某幾天） | `news_dept_social.fct_daily_traffic` |
 | **原因分析**：哪些影片表現最好、依主題 / 節目 / 直式切分、單則貼文排行 | `news_dept_social.fct_social_post_performance` |
 | 原因分析的逐月彙總（依發布月份） | `news_dept_social.agg_news_dept_social_monthly` |
+| **單一 YouTube 頻道**（例如 Explains）的總體成效 | `news_dept_social.fct_daily_traffic` 篩 `channel_name`，依 `year_month` 加總（月彙總表沒有頻道欄位） |
+| 單一 YouTube 頻道的影片排行 / 原因分析 | `news_dept_social.fct_social_post_performance` 篩 `channel_name` |
+| 單位、平台、帳號對照，某帳號是否停更 | `news_dept_social.dept_accounts` |
+| YouTube 頻道與單位的對照 | `news_dept_social.youtube_channels` |
+| 指標在各平台的原生欄位與定義 | `news_dept_social.platform_metric_glossary` |
 
 **問「為什麼」時兩層都要用**：先用每日流量說明總體變化，再用影片層找出貢獻最大的影片 / 主題，並說明兩層口徑不同（影片層是依發布日累計）。
-| 單位、平台、帳號對照，某帳號是否停更 | `news_dept_social.dept_accounts` |
-| 指標在各平台的原生欄位與定義 | `news_dept_social.platform_metric_glossary` |
 
 不要查 `dbt_internal` 或各平台原表：原表有快照、重複等陷阱（例如 IG 原表直接 SUM 會灌水上百倍），已在上述表格處理好。
 

@@ -109,7 +109,7 @@ flowchart LR
 |---|---|---|---|---|
 | Staging | 12 | view | `dbt_internal` | One model per raw table: rename, cast, dedupe snapshots, add `dept_scope`. `stg_youtube__shorts` is the single "is this a Short" entry point (weekly API list ∪ monthly labelled list) |
 | Intermediate | 2 | view | `dbt_internal` | Union the 4 platforms into one long table; dedupe the CMS post map |
-| Marts — **daily traffic** | `fct_daily_traffic`, `agg_news_dept_daily_traffic_monthly` | view | `news_dept_social` | Day × unit × platform × content type. **Overall KPI.** |
+| Marts — **daily traffic** | `fct_daily_traffic`, `agg_news_dept_daily_traffic_monthly` | view | `news_dept_social` | Day × unit × platform × content type (× YouTube channel). **Overall KPI.** |
 | Marts — **video level** | `fct_social_post_performance`, `agg_news_dept_social_monthly` | view | `news_dept_social` | One row per video post. **Root cause**: which videos/topics performed. |
 | Compat | 13 | view | `social_hub` | Same names and outputs as the legacy views, for Looker Studio |
 | Seeds | 3 | table | `news_dept_social` | Governed mappings: unit × platform × raw table, YouTube channel → unit, metric glossary |
@@ -192,7 +192,7 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 | [`assert_monthly_agg_matches_fct`](tests/assert_monthly_agg_matches_fct.sql) | Same, for the video-level grain |
 | [`assert_daily_traffic_non_negative`](tests/assert_daily_traffic_non_negative.sql) | No negative views or watch hours (see Decision 2) |
 | [`assert_dept_platform_in_dept_accounts`](tests/assert_dept_platform_in_dept_accounts.sql) | Every unit × platform in the data is registered in the governed seed |
-| [`assert_youtube_channels_match_video_news_broad`](tests/assert_youtube_channels_match_video_news_broad.sql) | The channel → unit seed agrees with the upstream YouTube table |
+| [`assert_youtube_channels_match_video_news_broad`](tests/assert_youtube_channels_match_video_news_broad.sql) | The channel seed (unit and name) agrees with the upstream YouTube table, so a channel rename on YouTube fails the daily check |
 | [`assert_post_map_post_has_single_vod`](tests/assert_post_map_post_has_single_vod.sql) | A social post never maps to two CMS videos (prevents fan-out) |
 | [`assert_classified_vod_not_shorts`](tests/assert_classified_vod_not_shorts.sql) | Topic-classified long-form videos are not Shorts. Checked against the weekly API Shorts list, so a Short that the monthly classifier treated as long-form is caught within a week |
 | [`assert_vod_publish_date_matches_vod_id`](tests/assert_vod_publish_date_matches_vod_id.sql) | CMS IDs and publish dates are consistent |

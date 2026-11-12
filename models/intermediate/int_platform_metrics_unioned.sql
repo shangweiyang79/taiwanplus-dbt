@@ -5,7 +5,7 @@
     'join_key', 'platform', 'dept_scope',
     'views', 'engaged_views', 'watch_time_hours', 'engagements', 'impressions', 'ctr',
     'platform_title', 'platform_published_date', 'orientation', 'is_vertical',
-    'link', 'caption', 'thumbnail_url',
+    'link', 'caption', 'thumbnail_url', 'channel_name',
 ] %}
 
 {%- set models = [

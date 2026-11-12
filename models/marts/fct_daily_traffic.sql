@@ -1,4 +1,5 @@
--- 一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story）。新聞部每日流量的主表。
+-- 一列 = 日 × 新聞部單位 × 平台 × 內容類型（video / story）× YouTube 頻道。新聞部每日流量的主表。
+-- YouTube 每個頻道各一列（channel_name），其他平台每個單位只有一個帳號，channel_name 為 NULL。
 --
 -- 每日流量 = 當天實際發生的觀看，不分影片什麼時候發布。問「總體成效」時用這張；
 -- 問「哪些影片表現好、為什麼」才用影片層的 fct_social_post_performance。
@@ -6,7 +7,7 @@
 
 {%- set cols = [
     'date', 'dept_scope', 'platform', 'content_type',
-    'views', 'paid_views', 'engaged_views', 'watch_time_hours', 'source_method',
+    'views', 'paid_views', 'engaged_views', 'watch_time_hours', 'source_method', 'channel_name',
 ] %}
 
 {%- set models = [
@@ -35,13 +36,15 @@ collection_end as (
 )
 
 select
-  concat(cast(date as string), ':', dept_scope, ':', platform, ':', content_type) as traffic_uid,
+  concat(cast(date as string), ':', dept_scope, ':', platform, ':', content_type,
+         if(channel_name is null, '', concat(':', channel_name)))   as traffic_uid,
   date,
   format_date('%Y-%m', date)                        as year_month,
   date_trunc(date, month)                           as month_start,
   dept_scope,
   platform,
   content_type,
+  channel_name,
   views,
   paid_views,
   engaged_views,

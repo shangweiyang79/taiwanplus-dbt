@@ -8,6 +8,9 @@ variants:
   q2_newsroom_yt_last_month:
     paraphrase: 上月新聞台的 YouTube 一共有幾次觀看？
     en: How many YouTube views did Newsroom get last month?
+  q13_explains_recent:
+    paraphrase: TaiwanPlus Explains 頻道最近幾個月表現怎麼樣？
+    en: How has the Explains channel performed recently?
   q3_talks_ig_engagement_rate:
     paraphrase: 2026 年以來 Taiwan Talks 的 Instagram 互動率大概多少？
     en: What is Talks' Instagram engagement rate so far this year?

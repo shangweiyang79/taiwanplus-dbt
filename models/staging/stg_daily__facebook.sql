@@ -10,5 +10,6 @@ select
   page_video_views_paid                             as paid_views,
   cast(null as int64)                               as engaged_views,
   page_video_view_time / 60                         as watch_time_hours,
-  'facebook_insights'                               as source_method
+  'facebook_insights'                               as source_method,
+  cast(null as string)                              as channel_name    -- 只有 YouTube 分頻道
 from {{ source('facebook', 'TaiwanPlus_news') }}

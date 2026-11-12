@@ -20,5 +20,6 @@ select
   link,
   content                                         as caption,
   -- 由 x_thumbnails_bq.py 抓回，不會過期
-  thumbnail_url
+  thumbnail_url,
+  cast(null as string)                            as channel_name   -- 只有 YouTube 分頻道
 from {{ source('x', 'post_metrics') }}

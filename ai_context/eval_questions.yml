@@ -45,7 +45,7 @@ questions:
       metric: traffic_views（YouTube Views），附 engaged views
       period: 上一個完整月份
     must_mention:
-      - 只算 Newsroom（TaiwanPlus News / Livestream / Explained 三個頻道）
+      - 只算 Newsroom（TaiwanPlus News / Livestream / Explains 三個頻道）
       - 是當月實際發生的觀看
     must_not:
       - 把 Talks 或 Connected 的 YouTube 算進去
@@ -55,6 +55,33 @@ questions:
       FROM `${GCP_PROJECT}.news_dept_social.agg_news_dept_daily_traffic_monthly`
       WHERE dept_scope = 'newsroom' AND platform = 'YouTube'
         AND month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
+
+  # 2026-11-12 使用者回報：Explained 頻道改名 Explains 後，問「Explains 近期成效」回的是整個 Newsroom YouTube。
+  # 原因是表上沒有頻道欄位；已在 fct_daily_traffic / fct_social_post_performance 加 channel_name。
+  - id: q13_explains_recent
+    question: Explains 近期成效如何？
+    expected:
+      layer: 每日流量
+      scope: 只有 TaiwanPlus Explains 這個 YouTube 頻道（channel_name = 'TaiwanPlus Explains'）
+      metric: traffic_views（YouTube Views），附 engaged views
+      period: 最近三個完整月份
+    must_mention:
+      - 範圍是 TaiwanPlus Explains 單一 YouTube 頻道
+      - 逐月列出觀看數與 engaged views
+      - 期間跨過 2026-08-27 時，說明 Views 門檻放寬的影響
+    must_not:
+      - 用整個 Newsroom 的 YouTube（含 TaiwanPlus News / Livestream）回答
+      - 說找不到 Explains 或沒有頻道資料
+      - 用影片層回答總體成效
+    reference_sql: |
+      SELECT year_month, SUM(views) AS views, SUM(engaged_views) AS engaged_views,
+             SUM(watch_time_hours) AS watch_time_hours, COUNT(DISTINCT date) AS days_with_data
+      FROM `${GCP_PROJECT}.news_dept_social.fct_daily_traffic`
+      WHERE channel_name = 'TaiwanPlus Explains'
+        AND month_start >= DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 3 MONTH)
+        AND month_start <  DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH)
+      GROUP BY year_month
+      ORDER BY year_month
 
   - id: q3_talks_ig_engagement_rate
     question: Talks 今年 IG 的互動率是多少？
