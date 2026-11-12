@@ -34,16 +34,18 @@ def data_uri(name):
 
 ICON = data_uri("taiwanplus_news.png")           # 方形原圖，給分頁圖示
 LOGO = data_uri("taiwanplus_news_wide.png")      # 裁掉白邊的橫式版，給側欄與標題
-st.set_page_config(page_title="新聞部社群成效AI助理｜TaiwanPlus News", page_icon=ICON, layout="wide")
+st.set_page_config(page_title="新聞部社群成效AI助理｜News Social AI｜TaiwanPlus News", page_icon=ICON, layout="wide")
 st.logo(LOGO, size="large")
 
+# 介面標籤中英並陳（2026-11-03 起，有外國同事使用）；資料提醒、查詢範圍、側欄底部說明維持中文（使用者決定）
 EXAMPLES = [
     "新聞部近期社群成效如何？",
     "Newsroom 上個月 YouTube 的觀看數是多少？",
     "上個月 Newsroom 在 YouTube 觀看數最高的 5 支影片是哪些？",
     "新聞部 YouTube 9 月的觀看數比 7 月成長很多，是真的成長嗎？",
+    "What are Newsroom's top 5 Facebook videos by views so far this year?",
 ]
-MODES = {"自動": None, "快速": False, "深入分析": True}
+MODES = {"自動 Auto": None, "快速 Quick": False, "深入分析 In-depth": True}
 
 
 @st.cache_resource
@@ -95,7 +97,7 @@ def render(msg, skip_answer=False):
     tables = [r for r in msg.get("results", []) if r["rows"]]
     sqls = [r["sql"] for r in msg.get("results", []) if r.get("sql")]
     if tables or sqls:
-        with st.expander("查看資料與 SQL"):
+        with st.expander("查看資料與 SQL View data & SQL"):
             for r in tables:
                 st.dataframe(to_frame(r["rows"]), hide_index=True)
             for sql in sqls:
@@ -113,7 +115,7 @@ def ask(question, deep, history):
     msg = {"role": "assistant", "results": [], "charts": []}
     fast_answer = []
     start = time.time()
-    label = "⚡ 查詢資料中…"
+    label = "⚡ 查詢資料中 Querying data…"
     with st.status(label, expanded=False) as status:
         try:
             for kind, payload in client.ask(st.session_state.conversation, question, thinking=False):
@@ -128,10 +130,10 @@ def ask(question, deep, history):
                     fast_answer.append(payload)
                 elif kind == "error":
                     msg["error"] = payload
-            status.update(label=f"資料取得完成（{time.time() - start:.0f} 秒）", state="complete")
+            status.update(label=f"資料取得完成 Data ready（{time.time() - start:.0f} 秒 s）", state="complete")
         except Exception as e:
-            msg["error"] = f"查詢失敗：{type(e).__name__}: {e}"
-            status.update(label="查詢失敗", state="error")
+            msg["error"] = f"查詢失敗 Query failed：{type(e).__name__}: {e}"
+            status.update(label="查詢失敗 Query failed", state="error")
     fetch_seconds = round(time.time() - start, 1)
 
     answer = "\n\n".join(fast_answer)
@@ -150,10 +152,10 @@ def ask(question, deep, history):
     msg["answer"] = answer
     msg["unmatched"] = unmatched_numbers(answer, msg["results"]) if narrated else []
     msg["notes"] = unsaid(build_notes(msg["results"]), answer)
-    if "查詢範圍" not in answer and "Query Scope" not in answer:
+    if "查詢範圍" not in answer and "query scope" not in answer.lower():
         msg["scope"] = scope_line(msg["results"])
-    msg["meta"] = (f"🧠 深入分析｜取數 {fetch_seconds} 秒＋撰寫 {round(seconds - fetch_seconds, 1)} 秒" if narrated
-                   else f"⚡ 快速｜{seconds} 秒")
+    msg["meta"] = (f"🧠 深入分析 In-depth｜取數 fetch {fetch_seconds}s＋撰寫 write {round(seconds - fetch_seconds, 1)}s"
+                   if narrated else f"⚡ 快速 Quick｜{seconds}s")
     render(msg, skip_answer=True)
     log(user=user_email(), question=question, deep=deep, narrated=narrated, seconds=seconds,
         fetch_seconds=fetch_seconds, n_results=len(msg["results"]), unmatched=msg["unmatched"], error=msg.get("error"))
@@ -162,15 +164,17 @@ def ask(question, deep, history):
 
 # ---- 版面 -----------------------------------------------------------------
 with st.sidebar:
-    st.header("設定")
-    mode = st.radio("回答模式", list(MODES), index=0,
-                    help="自動：問「為什麼、是真的嗎、哪個最好、成效如何」等需要判斷的問題時用深入分析，其餘用快速。")
-    if st.button("開新對話", use_container_width=True):
+    st.header("設定 Settings")
+    mode = st.radio("回答模式 Answer mode", list(MODES), index=0,
+                    help="自動：問「為什麼、是真的嗎、哪個最好、成效如何」等需要判斷的問題時用深入分析，其餘用快速。\n\n"
+                         "Auto: questions that need judgement (why, is it real, which is best, how is it performing) "
+                         "use In-depth; the rest use Quick.")
+    if st.button("開新對話 New chat", use_container_width=True):
         st.session_state.pop("conversation", None)
         st.session_state.messages = []
         st.rerun()
     st.divider()
-    st.markdown("**範例問題**")
+    st.markdown("**範例問題 Example questions**")
     for q in EXAMPLES:
         if st.button(q, key=f"ex-{q}", use_container_width=True):
             st.session_state.pending = q
@@ -185,7 +189,8 @@ with st.sidebar:
 head_logo, head_title = st.columns([1, 10], vertical_alignment="center")
 head_logo.image(LOGO, width=90)
 head_title.title("新聞部社群成效AI助理")
-st.caption("用中文或英文問新聞部的社群成效。")
+head_title.markdown("##### News Dept Social Media Performance AI Assistant")
+st.caption("用中文或英文問新聞部的社群成效。Ask about the News Dept's social media performance in Chinese or English.")
 
 st.session_state.setdefault("messages", [])
 for m in st.session_state.messages:
@@ -195,7 +200,7 @@ for m in st.session_state.messages:
         else:
             st.markdown(m["content"])
 
-question = st.chat_input("例如：Talks 今年 IG 的互動率是多少？") or st.session_state.pop("pending", None)
+question = st.chat_input("例如：Talks 今年 IG 的互動率是多少？／e.g. What is Talks' Instagram engagement rate this year?") or st.session_state.pop("pending", None)
 if question:
     history = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
     st.session_state.messages.append({"role": "user", "content": question})

@@ -4,7 +4,8 @@
 -- 已知限制：
 --   1. 沒有 vod_id，所以沒有主題分類 / tag。要依主題分析請用 v_vertical_category_performance。
 --   2. 跨平台比絕對值沒有意義（FB 播放滿 3 秒、IG Total Plays、YouTube views），只能看各平台自己的趨勢。
---   3. YouTube Shorts 靠 yt_shorts 清單判斷，完整度取決於最近一次有沒有重新匯出。
+--   3. YouTube Shorts 靠 stg_youtube__shorts 名單判斷（每週一更新，2026-11-10 起）；剛發布幾天、
+--      YouTube 還沒判定的 Short 要到下一次週更才會算進來。
 --   4. X 沒有直式 / 橫式資訊，不在這張表。
 --
 -- 舊版直接讀原表；這裡改讀 staging，IG 取最新快照等邏輯只維護一份，結果相同。

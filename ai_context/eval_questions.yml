@@ -150,6 +150,32 @@ questions:
       ORDER BY views DESC
       LIMIT 5
 
+  # 2026-11-03 使用者回報：「上個月新聞部 Top 5 影片」只回 Newsroom 的 YouTube（套用了 q6 的範例查詢）。
+  # 使用者決定：沒指定單位 / 平台的影片排行，三單位四平台合併排序，只列前 5，附門檻不同的提醒
+  - id: q12_dept_top_videos
+    question: 上個月新聞部觀看數最高的 5 支影片是哪些？
+    expected:
+      layer: 影片層
+      scope: newsroom + talks + connected，四個平台合併成一個排行
+      metric: views（單則）
+      period: 上一個完整月份發布的影片
+    must_mention:
+      - 每支影片標示單位與平台
+      - 附上影片標題、發布日期與連結
+      - 各平台觀看門檻不同，跨平台排序只能參考
+      - 這是上個月發布的影片到今天的累計觀看
+    must_not:
+      - 只列 Newsroom 或只列 YouTube
+      - 改成各平台分開列各自的前 5
+      - 從每日流量或月彙總表回答（沒有單則影片）
+    reference_sql: |
+      SELECT dept_scope, platform, COALESCE(NULLIF(platform_title, ''), LEFT(caption, 100)) AS title,
+             publish_date, views, engaged_views, link
+      FROM `${GCP_PROJECT}.news_dept_social.fct_social_post_performance`
+      WHERE month_start = DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Taipei'), MONTH), INTERVAL 1 MONTH)
+      ORDER BY views DESC
+      LIMIT 5
+
   - id: q7_ytd_total
     question: 新聞部今年到目前為止總共有多少觀看？
     expected:

@@ -31,10 +31,11 @@
   - 撰寫時偶爾會抄錯數字，所以 `narrator.unmatched_numbers` 會檢查回答裡的數字，查詢結果中找不到的會顯示黃色提醒。
   - 換撰寫模型（`config.NARRATOR_MODEL`）或改 prompt 之後，要跑 `python eval_deep.py` 重新評估。
 - **快速模式**取數正確，但回答常漏掉業務提醒。所以 `notes.build_notes` 會依查詢結果，用固定規則補上提醒：YouTube 8/27 門檻、IG 6/1 換算法、Connected IG 停更、跨平台不可比、本月未完整，以及「查詢範圍」。回答裡已經講過的提醒不會重複附上。
-- **語言**：中文問題會在訊息後面附上「請用繁體中文回答」。實測快速模式不加這句，中文問題常會用英文回答。
+- **語言**：中文問題會在訊息後面附上「請用繁體中文回答」，英文問題附上 "Please answer in English."。實測快速模式兩個方向都會出錯：中文問題常用英文回答，英文問題也會用中文回答（2026-11-03 英文 FB 範例題）。
 
 ## 介面注意事項
 
+- **介面標籤中英並陳**（2026-11-03 起，有外國同事使用）：標題、側欄、輸入框、狀態列、展開區都是「中文 English」。答案下方的資料提醒、查詢範圍、數字核對提醒，以及側欄底部的資料說明，刻意維持只有中文（使用者決定）。範例問題最後一題是英文。英文問題在深入分析時，`narrator` 會另外要求用英文回答。
 - **圖片一律用 data URI**（`app.data_uri`），不要用檔案路徑。Streamlit 1.57 透過 `/media/` 送圖片時，經過 IAP 會回 500（`Expected ASGI message 'http.response.start'`），2026-10-15 logo 就因此沒顯示。
 - **CA API 的「建議追問」不顯示**：有些建議的問題，資料表裡根本沒有資料可以回答（2026-10-15 使用者回饋）。
 - **圖表來自 CA API**（Vega-Lite），不是撰寫模型畫的。快速取數時 CA API 常會附上趨勢圖。
@@ -93,6 +94,31 @@ gcloud iap web get-iam-policy --resource-type=cloud-run --service=data-chatbox -
 ```
 
 2026-10-15 首次上線時只開給 `<you@your-domain>`。
+
+### 開放給組織外的帳號（gmail 等）
+
+`--iap` 預設用 Google 代管的 OAuth client，**只有同一個 GCP 組織的帳號能從瀏覽器登入**。組織外的帳號就算加進 IAM，也會在 Google 登入頁被擋下。要開放組織外的帳號，需要改用自建的 OAuth client（2026-11-05 已改）：
+
+1. Console → Google Auth Platform：
+   - Audience 改成 **External**，發布狀態設成 **In production**。只用基本 scope，不需要送審。不要用 Testing：每個人都要另外加進測試使用者名單，而且登入一陣子就失效。
+   - Branding 要填 app name、support email、首頁、隱私權政策網址，以及 authorized domain。**不要上傳 logo**，上傳後就要送品牌驗證。
+   - 同意畫面是整個專案共用的，改之前先看 Clients 頁有沒有其他 client。
+2. Clients → 建立 Web application。建好之後，Authorized redirect URI 填 `https://iap.googleapis.com/v1/oauth/clientIds/<CLIENT_ID>:handleRedirect`。
+3. 讓 IAP 改用這個 client。yaml 裡有 secret，放在 repo 外面，用完就刪：
+   ```bash
+   # iap_settings.yaml
+   # access_settings:
+   #   oauth_settings:
+   #     client_id: <CLIENT_ID>
+   #     client_secret: <CLIENT_SECRET>
+   gcloud iap settings set iap_settings.yaml --resource-type=cloud-run --service=data-chatbox --region=asia-east1
+   ```
+4. 驗證：`curl -s -o /dev/null -w '%{redirect_url}' <服務網址>/`，轉址的 `client_id` 應該是新的 client。
+
+改完之後加人的方式一樣，`--member=user:xxx@gmail.com` 就可以。不在名單的人會看到 IAP 的 "You don't have access"。
+
+- 公司信箱不在 Google（例如 Microsoft 365）的同事，要先用那個信箱註冊 Google 帳號（「使用現有的電子郵件地址」），才能登入。
+- 個人 gmail 不會因為同事離職而自動失效，要手動移除。
 
 ## 維運
 

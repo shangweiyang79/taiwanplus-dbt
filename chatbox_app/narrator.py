@@ -16,6 +16,7 @@ from google import genai
 from google.cloud import geminidataanalytics as gda
 from google.genai import types
 
+from ca_client import _CJK
 from config import AGENT_NAME, NARRATOR_MODEL, PROJECT
 
 TASK = """
@@ -50,6 +51,9 @@ def narrate(credentials, question, results, history=()):
     )
     prior = "".join(f"- {q}\n" for q in history[-3:])
     prompt = (f"先前的問題（供理解追問的上下文）：\n{prior}\n" if prior else "") + f"問題：{question}\n\n查詢結果：\n{data}"
+    if not _CJK.search(question):
+        # prompt 框架是中文，英文問題要明講用英文回答（英文版的深入分析沒有進評估題組）
+        prompt += '\n\nAnswer in English, including the final "Query scope:" line.'
     stream = _gemini(credentials).models.generate_content_stream(
         model=NARRATOR_MODEL,
         contents=prompt,
