@@ -38,13 +38,16 @@ sources:
         description: >
           YouTube 頻道 × 日的每日流量（date 為 YYYYMMDD 字串），含 19 個頻道，新聞部只取 seed youtube_channels 裡的 5 個。
           total_views 含付費（paid_views）。
-        # 最新 date 平常是 T-3，延遲最長約 3.7 天（D+2 下午新資料進來前）。
-        # YouTube 晚一天只出 warn，晚兩天以上才報錯。
+        # 門檻依實測：報表日 D 平常在 D+2 下午第一次進來，但 YouTube 常晚送。
+        # 2026-06 ~ 11 最新 date 的落後天數最大 5.85 天，≥4 天 26 次、≥5 天 3 次
+        # （2026-11-14/15 週末 11/10~11/12 晚送 D+4~D+5，舊門檻 5 天因此誤報 7 次，見 orchestration/README.md）。
+        # YouTube 晚送會自己恢復，不需要人處理，所以 error 放到 7 天；
+        # 「我們自己的鏈斷了」改由 tests/assert_youtube_summary_caught_up_with_owner.sql 在一天內抓。
         config:
           loaded_at_field: "CAST(PARSE_DATE('%Y%m%d', date) AS TIMESTAMP)"
           freshness:
-            warn_after: {count: 4, period: day}
-            error_after: {count: 5, period: day}
+            warn_after: {count: 5, period: day}
+            error_after: {count: 7, period: day}
       - name: video_news_category
         description: >
           雲端分類 pipeline（Cloud Run news-classify-monthly，每月 5 號）寫入的 YouTube 影片主題分類，

@@ -94,16 +94,37 @@ main:
                         procedure: refresh_video_news_broad
 
     # 4. 衍生表更新完才跑 dbt 檢查；connector 會等 job 執行結束，
-    #    回傳的是 long-running operation，Execution 在 response 底下
+    #    回傳的是 long-running operation，Execution 在 response 底下。
+    #    檢查沒過（freshness / test）時 connector 會 raise OperationError（metadata.failedCount > 0）。
+    #    這種情況不讓 workflow 失敗：dbt-daily-checks 自己的告警已經會寄信，workflow 再失敗只是重複的信
+    #    （2026-11-15 YouTube 晚送，一個問題寄了兩種信、共 9 封）。workflow 告警只留給這條鏈自己的步驟；
+    #    jobs.run 呼叫本身出錯（權限、job 不存在）仍會往上丟，讓 workflow 失敗。
     - run_dbt_checks:
-        call: googleapis.run.v2.projects.locations.jobs.run
-        args:
-          name: ${"projects/" + project + "/locations/" + location + "/jobs/dbt-daily-checks"}
-        result: op
+        try:
+          call: googleapis.run.v2.projects.locations.jobs.run
+          args:
+            name: ${"projects/" + project + "/locations/" + location + "/jobs/dbt-daily-checks"}
+          result: op
+        except:
+          as: e
+          steps:
+            - classify_error:
+                switch:
+                  - condition: ${"OperationError" in default(map.get(e, "tags"), []) and default(map.get(e, ["operation", "metadata", "failedCount"]), 0) > 0}
+                    steps:
+                      - log_checks_failed:
+                          call: sys.log
+                          args:
+                            severity: WARNING
+                            text: ${"衍生表已更新，但 dbt-daily-checks 沒過（另有告警信）：" + e.operation.metadata.name}
+                      - checks_failed:
+                          return: ${"refreshed; dbt checks FAILED, see dbt-daily-checks alert (" + e.operation.metadata.name + ")"}
+            - reraise:
+                raise: ${e}
     - check_dbt_result:
         switch:
-          - condition: ${"error" in op or default(map.get(op, ["response", "failedCount"]), 0) > 0}
-            raise: ${"dbt-daily-checks 失敗：" + json.encode_to_string(op)}
+          - condition: ${default(map.get(op, ["response", "failedCount"]), 0) > 0}
+            return: ${"refreshed; dbt checks FAILED, see dbt-daily-checks alert (" + op.response.name + ")"}
     - done:
         return: ${"refreshed; dbt checks passed (" + op.response.name + ")"}
 
