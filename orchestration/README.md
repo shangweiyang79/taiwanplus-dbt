@@ -143,9 +143,23 @@ gcloud run jobs describe dbt-daily-checks --region=asia-east1 $P --format='value
 
 改了 model / test 不用再手動更新 job 的映像：合併進 main 後 CD 會自動重建。
 
-**收到告警信時**：到 Cloud Run → Jobs → `dbt-daily-checks` 打開那次執行的 log，往上找 `ERROR` / `FAIL`。
+**收到告警信時**：到 Cloud Run → Jobs → `dbt-daily-checks` 打開那次執行的 log，往上找 `ERROR` / `FAIL`，再依下表判斷。
 
-- freshness 錯誤：去查對應平台的 ingestion 服務（Cloud Run 服務的 log、Scheduler 是否被暫停）。
-- test 失敗：在本機用 `dbt test --target prod --select <test 名稱>` 重現，再用 `dbt show` 看是哪幾列。
+| log 裡看到 | 代表什麼 | 要做什麼 | 能等到週一嗎 |
+|---|---|---|---|
+| 只有 `youtube.daily_detailed_summary` stale | YouTube 晚送超過 7 天（不是我們壞掉） | 確認 BQ Data Transfer `youtube_taiwanplus_owner` 的執行沒有失敗即可，資料到了會自己恢復 | 可以 |
+| `assert_youtube_summary_caught_up_with_owner` 失敗 | owner 表有新資料、衍生表沒跟上：Eventarc 沒觸發或 procedure 壞了 | 看 Workflows → `youtube-owner-chain` 的執行紀錄，修好後 `gcloud workflows run youtube-owner-chain --location=asia-east1 --data='{"force": true}' $P` | 可以，procedure MERGE 最近 14 天 |
+| 其他 source freshness | 該平台的 ingestion 停了 | 查對應的 Cloud Run 服務 log、Scheduler 是否被暫停、權杖是否過期 | 看平台：快照類（IG reels 累計值）停太久會缺日資料 |
+| 其他 test 失敗 | 新資料破壞了假設 | 本機 `dbt test --target prod --select <test 名稱>` 重現，再用 `dbt show` 看是哪幾列 | 通常可以，數字錯誤會留在 view 直到修正 |
+
+`youtube-owner-chain failed` 的信只代表這條鏈自己的步驟出錯：判斷新資料、三個 procedure，或 jobs.run 呼叫本身。dbt 檢查沒過不會讓 workflow 失敗，只會寄 `dbt-daily-checks failed` 那一封。
+
+### 為什麼 YouTube freshness 門檻是 5 / 7 天
+
+2026-11-14、15 週末收到 7 次 freshness 錯誤，全部都是 `daily_detailed_summary`，52 個 test 都通過。原因是 YouTube 晚送了報表日 11/10–11/12（D+4 到 D+5 才進來，11/11 甚至比 11/12、11/13 還晚），DTS 每次執行都是 SUCCEEDED，資料到齊後自動恢復。
+
+用 load job 紀錄重算 2026-06 到 11 月「最新報表日落後幾天」：最大 5.85 天，≥4 天 26 次，≥5 天 3 次。所以舊門檻（4 / 5 天）在 YouTube 慢一點時就會誤報，現在改成 warn 5 天、error 7 天。放寬後，「我們自己的鏈斷了」交給 `assert_youtube_summary_caught_up_with_owner` 抓：只要 owner 表 3 小時前就有的報表日、衍生表沒有，隔天 12:00 就會報錯，不受 YouTube 延遲影響。
+
+也比較過改讀 `p_content_owner_combined_a3_owner` 會不會比較早：78% 的報表日兩張表同一小時進來，其餘互有先後（combined 早到 27 天、traffic_source 早到 15 天），重算落後天數最大一樣是 5.85 天，所以沒有換。
 
 dbt 版本固定在 2.0.9（本機、CI、Dockerfile 三處一致）。升級時三處一起改。

@@ -1,7 +1,7 @@
 {
   "displayName": "dbt-daily-checks failed",
   "documentation": {
-    "content": "每日 dbt 檢查（source freshness / test）失敗。到 Cloud Run → Jobs → dbt-daily-checks 打開這次執行的 log，往上找 ERROR / FAIL 看是哪個 source 或 test。處理方式見 orchestration/README.md。",
+    "content": "每日 dbt 檢查（source freshness / test）失敗。到 Cloud Run → Jobs → dbt-daily-checks 打開這次執行的 log，往上找 ERROR / FAIL 看是哪個 source 或 test。\n\n**先判斷要不要現在處理（週末可對照）：**\n\n- 只有 `youtube.daily_detailed_summary` stale → YouTube 晚送超過 7 天，不是我們壞掉；資料到了會自己恢復。確認 BQ Data Transfer `youtube_taiwanplus_owner` 沒有失敗即可。\n- `assert_youtube_summary_caught_up_with_owner` 失敗 → owner 表有新資料、衍生表沒跟上，是我們的鏈斷了。執行 `gcloud workflows run youtube-owner-chain --location=asia-east1 --data='{\"force\": true}'`。procedure 會 MERGE 最近 14 天，週一再補也不會缺資料。\n- 其他 source freshness → 該平台的 ingestion 停了（Cloud Run log、Scheduler 是否暫停、權杖是否過期）。\n- 其他 test 失敗 → 新資料破壞了假設，在本機用 `dbt test --target prod --select <test>` 重現。\n\n所有 model 都是 view，晚幾天處理不需要重建。詳見 orchestration/README.md「收到告警信時」。",
     "mimeType": "text/markdown"
   },
   "combiner": "OR",
