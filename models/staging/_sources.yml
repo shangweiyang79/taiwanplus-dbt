@@ -140,6 +140,18 @@ sources:
           freshness:
             warn_after: {count: 54, period: hour}
             error_after: {count: 72, period: hour}
+      - name: ig_news_reach_period
+        description: >
+          Newsroom IG 帳號的不重複觸及人數（reach）區間快照，一列 = 一個區間的一次抓取（同一區間每天重抓、保留每個版本）。
+          scope = account（帳號總觸及）/ reels（看過 Reels 的人），兩者不能互加。日期是美西日期（Meta 的日界線）。
+          IG 區間上限 30 天，所以 31 天的月份是「月底往回 30 天」（is_full_period = false）。
+          Cloud Run fb-news-videos 每天 10:20 順便寫入（news/cloudrun_fb_news_videos/news_reach.py）。reach 不能 SUM。
+        # fetched_at 是實際寫入時間（每天約 10:25），延遲最長約 1 天
+        config:
+          loaded_at_field: fetched_at
+          freshness:
+            warn_after: {count: 36, period: hour}
+            error_after: {count: 48, period: hour}
       - name: Connected
         description: >
           Connected 的 IG 帳號，2026-07-04 停更（實測最後一則 reel 發布於 2026-07-10），歷史資料保留。
@@ -189,6 +201,17 @@ sources:
         columns:
           - name: video_id
             data_tests: [unique, not_null]
+      - name: fb_news_reach_period
+        description: >
+          Newsroom FB 粉專的不重複觸及人數（page_total_media_view_unique）區間快照，一列 = 一個區間的一次抓取。
+          日期是美西日期（Meta 的日界線）；month 是完整日曆月。這個指標 2025-05 以前是 0（Meta 尚未提供），
+          與已下架的舊指標 page_impressions_unique 口徑不同，不能接成同一條趨勢線。
+          Cloud Run fb-news-videos 每天 10:20 順便寫入（news/cloudrun_fb_news_videos/news_reach.py）。reach 不能 SUM。
+        config:
+          loaded_at_field: fetched_at
+          freshness:
+            warn_after: {count: 36, period: hour}
+            error_after: {count: 48, period: hour}
 
   - name: x
     database: "{{ target.database }}"
