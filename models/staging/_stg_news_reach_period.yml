@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: stg_news_reach_period
+    description: >
+      一列 = Newsroom 在 FB / IG 某個區間的不重複觸及人數（reach），取該區間最新一次抓取。
+      reach 是平台去重後的人數，**不能 SUM**：同一個人連看 7 天，每日資料算 7 次、week 只算 1 次；
+      跨平台、跨 scope 也一樣會重複。要週／雙週／月的觸及人數，請直接取對應 period_type 的列，不要用 day 加總。
+    config:
+      meta:
+        additivity: non_additive
+    columns:
+      - name: period_key
+        description: platform:scope:period_type:period_start:period_end
+        data_tests: [unique, not_null]
+      - name: platform
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Facebook', 'Instagram']
+      - name: scope
+        description: >
+          Facebook：page（粉專）。Instagram：account（帳號總觸及）/ reels（看過 Reels 的人，是 account 的子集）。
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['page', 'account', 'reels']
+      - name: period_type
+        description: >
+          day / week / days_28：以 period_end 為最後一天的 1 / 7 / 28 天（rolling）。
+          biweek：對齊雙週報，2026-11-02（週一）起每 14 天一期。
+          month：FB 是完整日曆月；IG 區間上限 30 天，31 天的月份是月底往回 30 天（is_full_period = false）。
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['day', 'week', 'days_28', 'biweek', 'month']
+      - name: period_start
+        description: 區間第一天（美西日期，Meta 的日界線）。
+        data_tests: [not_null]
+      - name: period_end
+        description: 區間最後一天（美西日期，含）。
+        data_tests: [not_null]
+      - name: is_full_period
+        description: false = IG 的 31 天月份只涵蓋月底往回 30 天，比完整日曆月略低。
+      - name: reach
+        description: 平台去重後的不重複觸及人數。不可 SUM（跨日、跨區間、跨 scope、跨平台都會重複計算）。
+        config:
+          meta:
+            additivity: non_additive
+      - name: source_metric
+        description: API 指標名稱。FB = page_total_media_view_unique，IG = reach。

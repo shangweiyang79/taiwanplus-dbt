@@ -440,6 +440,51 @@ models:
       - name: is_current_month
         description: 是否為本月（台北時間），本月資料不完整。
 
+  - name: fct_news_reach_period
+    description: >
+      一列 = Newsroom 在 FB / IG 某個區間的不重複觸及人數（reach，觸及多少「人」）。
+      問「某月／雙週／一週觸及多少人」時直接取對應 period_type 的列。
+      reach 不可加總：不能把 day 加成月、不能把兩個月相加、不能把 FB + IG 相加、不能把 IG 的 account + reels 相加
+      （同一個人會被重複計算）。若一定要用每日資料，只能說「日均觸及」或「累計觸及人次」，不能叫觸及人數。
+      日期是美西日期（Meta 的日界線）。只有 Newsroom（TaiwanPlus News），其他帳號尚未收集。
+      FB 2025-05 起、IG 2025-05 起有月資料；週、days_28 從 2026-11 起每天累積。
+    config:
+      meta:
+        additivity: non_additive
+    columns:
+      - name: period_key
+        description: platform:scope:period_type:period_start:period_end
+        data_tests: [unique, not_null]
+      - name: platform
+        description: Facebook / Instagram。
+      - name: dept_scope
+        description: 目前只有 newsroom。
+      - name: scope
+        description: >
+          Facebook：page（粉專）。Instagram：account（帳號總觸及，預設用這個）/ reels（看過 Reels 的人，是 account 的子集）。
+      - name: period_type
+        description: >
+          day / week / days_28：以 period_end 為最後一天的 1 / 7 / 28 天。
+          biweek：對齊雙週報，2026-11-02（週一）起每 14 天一期。
+          month：FB 是完整日曆月；IG 區間上限 30 天，31 天的月份是月底往回 30 天（is_full_period = false）。
+      - name: period_start
+        description: 區間第一天（美西日期）。
+      - name: period_end
+        description: 區間最後一天（美西日期，含）。
+      - name: days_covered
+        description: 區間天數。
+      - name: is_full_period
+        description: false = IG 的 31 天月份只涵蓋月底往回 30 天，比完整日曆月略低。
+      - name: reach
+        description: 平台去重後的不重複觸及人數。不可 SUM。
+        config:
+          meta:
+            additivity: non_additive
+      - name: source_metric
+        description: API 指標名稱。FB = page_total_media_view_unique，IG = reach。
+      - name: fetched_at
+        description: 這個數字的抓取時間（同一區間每天重抓，取最新）。
+
 saved_queries:
   - name: news_dept_social_performance
     label: 新聞部社群成效

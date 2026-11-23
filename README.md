@@ -51,7 +51,8 @@ flowchart TB
 - **Zero-downtime migration.** Rebuilt 13 legacy `social_hub` views in dbt **under the same names**. A row-level reconcile script proved the outputs identical (only float noise < 1e-11 and 2 rows of `APPROX_QUANTILES` approximation differed), so **Looker Studio needed no rewiring**.
 - **Resolved a metric ambiguity.** "Views" meant two different things in different reports. I split it into **daily traffic** (the KPI: views that *happened* in the period) and **video level** (for root cause: *cumulative* views by publish date). For the same unit and month, the two can differ by **~2×**, which is why the reports used to disagree.
 - **Fixed silent data bugs.** Summing the raw Instagram snapshot table **inflates views 100×+**. The account-level daily deltas also **went negative** whenever the API dropped reels (at one point more than half of an account's reels vanished from the feed in a single day). Per-reel snapshot deltas with a running max fixed it: one month's watch time went from a **six-figure negative** number to the correct positive value.
-- **Tested and documented.** **53 tests** (41 generic + 12 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
+- **People are not additive.** Reach ("how many people") can't be summed across days, platforms or content types — one person seen on 7 days counts 7 times. Instead of summing daily reach, the pipeline stores the **platform-deduplicated value for each reporting period** (week, biweekly report window, month), after reverse-engineering how Meta's API snaps date ranges to **Pacific-time** day boundaries ([Decision 6](#decision-6--never-sum-people-store-reach-per-period)). The same finding explained a long-standing ~20% under-count in daily Instagram numbers.
+- **Tested and documented.** **63 tests** (50 generic + 13 singular), source freshness on every actively updated source, and `persist_docs` so every definition also lands in **BigQuery column descriptions**. Business definitions live in **one file** ([`_definitions.md`](models/docs/_definitions.md)).
 - **Automated, keyless operations.** Every PR is built and tested in an isolated dataset; merging to `main` deploys prod with no manual step. Daily checks run freshness and every test against prod, an event-driven Workflow refreshes YouTube data as soon as it lands instead of guessing a schedule, and a weekly Cloud Run Job replaced a monthly hand-built CSV upload for the YouTube Shorts list. All of it runs on per-job least-privilege service accounts through Workload Identity Federation, with no keys ([§4](#4-data-quality--testing)).
 - **Semantic layer → AI.** 2 semantic models, 17 metrics and 2 saved queries are compiled into an AI context file. A Conversational Analytics agent plus a Streamlit chatbox (Cloud Run behind IAP, **verified read-only** service account) passes **20/20** eval questions (10 questions × original/paraphrase) with a **median latency of 20.4 s**. A number checker flags any figure in the answer that is not in the query result.
 - **Honest forecasting backtest.** Multi-cutoff backtest of **TimesFM vs ARIMA_PLUS vs naive**: TimesFM wins on X (**11%** 28-day error vs 21% naive), but **naive beats it on Newsroom YouTube** (18% vs 27%). So forecasts are used as a reference in the biweekly report, never as a KPI.
@@ -107,10 +108,11 @@ flowchart LR
 
 | Layer | Models | Materialization | Prod dataset | Purpose |
 |---|---|---|---|---|
-| Staging | 12 | view | `dbt_internal` | One model per raw table: rename, cast, dedupe snapshots, add `dept_scope`. `stg_youtube__shorts` is the single "is this a Short" entry point (weekly API list ∪ monthly labelled list) |
+| Staging | 13 | view | `dbt_internal` | One model per raw table: rename, cast, dedupe snapshots, add `dept_scope`. `stg_youtube__shorts` is the single "is this a Short" entry point (weekly API list ∪ monthly labelled list) |
 | Intermediate | 2 | view | `dbt_internal` | Union the 4 platforms into one long table; dedupe the CMS post map |
 | Marts — **daily traffic** | `fct_daily_traffic`, `agg_news_dept_daily_traffic_monthly` | view | `news_dept_social` | Day × unit × platform × content type (× YouTube channel). **Overall KPI.** |
 | Marts — **video level** | `fct_social_post_performance`, `agg_news_dept_social_monthly` | view | `news_dept_social` | One row per video post. **Root cause**: which videos/topics performed. |
+| Marts — **reach** | `fct_news_reach_period` | view | `news_dept_social` | One row per platform × period (day / week / 28 days / biweekly / month). Deduplicated **people** reached; **never summed** (Decision 6). Newsroom only for now. |
 | Compat | 13 | view | `social_hub` | Same names and outputs as the legacy views, for Looker Studio |
 | Seeds | 3 | table | `news_dept_social` | Governed mappings: unit × platform × raw table, YouTube channel → unit, metric glossary |
 
@@ -175,14 +177,27 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 
 **Result.** All 13 views reconciled. The only differences were float noise < 1e-11 and 2 rows of an `APPROX_QUANTILES` median, which also change when the *old* view's own SQL is rerun. Cutover required **zero dashboard changes**.
 
+### Decision 6 — Never sum people: store reach per period
+
+**Symptom.** Reports wanted "how many people did we reach this month", but the only reach in the warehouse was daily. Summing it overstates reach: over one 7-day window, the daily Instagram values added up to 1.45× the deduplicated weekly figure. The ratio also changes from week to week, so it can't be corrected after the fact.
+
+**Diagnosis.** Reach is a distinct count. With user-level events you would store HyperLogLog sketches and merge them for any period (BigQuery `HLL_COUNT`). Meta exposes no user IDs, though, so only the platform can deduplicate. Probing the Graph API showed three things:
+- Date ranges snap to **Pacific-time** midnights, with both ends inclusive.
+- Instagram caps a range at **30 days**, so a 31-day month can't be queried in one call.
+- Facebook's old page reach metric now returns an empty array instead of an error, which looks like valid data.
+
+**Fix.** A small collector in the ingestion service asks the API for the deduplicated value of each **reporting period**: rolling day / 7 / 28 days, the biweekly report window and the calendar month. Instagram months longer than 30 days are stored as the last 30 days and flagged `is_full_period = false`. It writes append-only snapshots, re-fetches the last 7 days of periods (late data), and fails instead of writing if Facebook's returned window doesn't match the requested one. [`stg_news_reach_period`](models/staging/stg_news_reach_period.sql) keeps the latest fetch per period. Model, column and BigQuery descriptions are tagged `additivity: non_additive` and spell out what must not be summed, for both analysts and the chatbox. [`assert_news_reach_period_within_daily_bounds`](tests/assert_news_reach_period_within_daily_bounds.sql) checks every period against the bounds that hold for any distinct count: **max(daily) ≤ period ≤ sum(daily)**. A breach means Meta changed its date-range rules.
+
+**Result.** Monthly reach is available from May 2025, the first month the new Facebook metric has data. The Pacific-time finding also explained why the daily Instagram job was ~20% low: it ran at 10:00 Taipei time, when "yesterday" had only 18 of its 24 hours in Pacific time. Snapshots confirmed that every value is final once fetched more than 24 hours after its Pacific day starts.
+
 ---
 
 ## 4. Data quality & testing
 
-**53 dbt tests** run with every `dbt build`.
+**63 dbt tests** run with every `dbt build`.
 
-- **41 generic tests:** `unique` / `not_null` on every grain key, and `accepted_values` on `dept_scope`, `platform` and `content_type`. Source tests cover upstream keys too.
-- **12 singular tests:**
+- **50 generic tests:** `unique` / `not_null` on every grain key, and `accepted_values` on `dept_scope`, `platform`, `content_type` and the reach `scope` / `period_type`. Source tests cover upstream keys too.
+- **13 singular tests:**
 
 | Test | What it guards |
 |---|---|
@@ -196,6 +211,7 @@ On 2026-10-27 watch hours moved upstream: the same per-reel logic now lives in t
 | [`assert_post_map_post_has_single_vod`](tests/assert_post_map_post_has_single_vod.sql) | A social post never maps to two CMS videos (prevents fan-out) |
 | [`assert_classified_vod_not_shorts`](tests/assert_classified_vod_not_shorts.sql) | Topic-classified long-form videos are not Shorts. Checked against the weekly API Shorts list, so a Short that the monthly classifier treated as long-form is caught within a week |
 | [`assert_vod_publish_date_matches_vod_id`](tests/assert_vod_publish_date_matches_vod_id.sql) | CMS IDs and publish dates are consistent |
+| [`assert_news_reach_period_within_daily_bounds`](tests/assert_news_reach_period_within_daily_bounds.sql) | Every deduplicated reach period lies between its largest single day and the sum of its days (warn). Catches a silent change in how the API maps date ranges to days (Decision 6) |
 | [`assert_fb_history_no_overlap`](tests/assert_fb_history_no_overlap.sql) | The frozen 2024–2025 Facebook history table and the live 2026+ table never share a video (warn; staging already keeps the live row) |
 | [`assert_youtube_summary_caught_up_with_owner`](tests/assert_youtube_summary_caught_up_with_owner.sql) | The derived YouTube daily table has every report day the owner transfer delivered more than 3 hours ago. This separates "our refresh chain is broken" (actionable, caught by the next daily check) from "YouTube is late" (not actionable, self-heals) |
 
@@ -255,7 +271,7 @@ No model wins everywhere, and viral-driven series (Talks) aren't forecastable at
 | [`models/social_hub/`](models/social_hub/) | 13 legacy-compatible views for Looker Studio |
 | [`models/docs/_definitions.md`](models/docs/_definitions.md) | **Single source of business definitions** (change definitions only here) |
 | [`seeds/`](seeds/) | Governed mappings: `dept_accounts`, `youtube_channels`, `platform_metric_glossary` |
-| [`tests/`](tests/) | 11 singular data tests |
+| [`tests/`](tests/) | 13 singular data tests |
 | [`macros/`](macros/) | Prod dataset routing; shared macro for per-platform compat views |
 | [`scripts/`](scripts/) | Reconcile, AI-context generator, eval reference runner, forecast backtest |
 | [`ai_context/`](ai_context/) | Generated AI context, eval question bank, CA agent build/deploy/eval, Claude skill |
@@ -318,5 +334,6 @@ The TaiwanPlus data is **proprietary and not included**. This repo contains only
 - **Materialize hot marts** as tables or incremental models. Everything is a view today, so one chatbox question scans ~0.1–1.6 GB.
 - **Slim CI/CD** (`state:modified+` with `--defer`) once full builds get slow. Today a full build takes about a minute, so it is not worth maintaining a prod manifest yet.
 - **Snapshots** for slowly changing mappings (account ownership, channel → unit).
+- **Reach for every unit.** Period reach covers only Newsroom; Talks' and Connected's accounts need their own page tokens. A MetricFlow `non_additive_dimension` could also let the semantic layer refuse to sum reach on its own.
 - **Query the semantic layer directly** (dbt platform) instead of compiling metrics into an AI context file.
 - **Retire the workbook round-trip for Shorts labels.** The classifier already writes Shorts topics and bite-reel flags to BigQuery, so `yt_shorts` could be rebuilt in dbt from those plus an override table for hand-filled values, instead of being pasted into a workbook and re-uploaded each month.
