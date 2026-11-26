@@ -8,6 +8,9 @@
 # 兩步都會跑完，任一步失敗就以非 0 結束 → Cloud Run 標記執行失敗 → Cloud Monitoring 發信。
 set -u
 
+# 成本防線 test（tests/assert_bq_scan_within_budget.sql）只在這裡打開，CI / CD 的 dbt build 不跑它
+export DBT_COST_CHECK=true
+
 status=0
 
 echo "== 1/2 dbt source freshness =="

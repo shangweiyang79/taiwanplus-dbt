@@ -43,6 +43,8 @@ ensure_sa dbt-runner "dbt daily checks" "Cloud Run Job dbt-daily-checks: read-on
 ensure_sa dbt-ci "dbt CI" "GitHub Actions via WIF: dbt build into the CI dataset only"
 
 # readSessionUser：dbt v2（Fusion）用 BigQuery Storage Read API 取回查詢結果，沒有它會報 dbt1308
+# 成本防線 test 要讀整個專案的 job 紀錄（INFORMATION_SCHEMA.JOBS_BY_PROJECT → bigquery.jobs.listAll），只給每日檢查
+gcloud projects add-iam-policy-binding "$GCP_PROJECT" --member="serviceAccount:$RUNNER_SA"   --role=roles/bigquery.resourceViewer --condition=None "${P[@]}" >/dev/null
 for sa in "$RUNNER_SA" "$CI_SA"; do
   for role in roles/bigquery.dataViewer roles/bigquery.jobUser roles/bigquery.readSessionUser; do
     gcloud projects add-iam-policy-binding "$GCP_PROJECT" --member="serviceAccount:$sa" --role="$role" \
