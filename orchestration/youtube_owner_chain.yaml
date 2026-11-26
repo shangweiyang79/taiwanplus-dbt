@@ -1,7 +1,8 @@
 # YouTube owner 報表的事件驅動鏈（Cloud Workflows: youtube-owner-chain）
 #
 #   owner transfer 每次執行結束 → Pub/Sub 通知 → Eventarc → 這個 workflow
-#     1. 判斷 owner 表是否比衍生表新；沒有新資料就結束（大部分 09:30 的排程執行都會停在這裡）
+#     1. 判斷要不要重建（限流）：有新報表日就馬上重建；只是舊日期被修正，距上次重建滿 20 小時才重建
+#        （owner transfer 每天會重寫舊 partition 十幾次，2026-11 每次都全量重建＋跑 dbt 檢查，BQ 一個月 2.7 TiB）
 #     2. MERGE daily_detailed_summary
 #     3. 同時重建 video_news_livestream、video_news_broad
 #     4. 跑 dbt 每日檢查（Cloud Run Job dbt-daily-checks），等它跑完
@@ -38,6 +39,12 @@ main:
         args:
           text: ${"觸發：" + trigger}
 
+    # has_new_data：owner 表有比衍生表新的寫入（含舊日期被修正）
+    # new_report_date：owner 出現衍生表還沒有的報表日；和 dbt test
+    #   assert_youtube_summary_caught_up_with_owner 比的是同一組（traffic_source_a3 vs daily_detailed_summary），
+    #   新報表日一定馬上重建，所以限流不會讓那個 test 誤報
+    # hours_since_refresh：衍生表最久沒更新的那張距今幾小時
+    # 整個查詢約 50 KB（MAX(_PARTITIONDATE) 只讀 metadata）
     - check_new_data:
         call: googleapis.bigquery.v2.jobs.query
         args:
@@ -46,18 +53,33 @@ main:
             useLegacySql: false
             location: ${location}
             query: |
+              WITH o AS (
+                SELECT MAX(last_modified_time) AS owner_modified
+                FROM `youtube_taiwanplus_owner.__TABLES__`
+                WHERE table_id IN ('p_content_owner_basic_a4_owner', 'p_content_owner_reach_basic_a1_owner',
+                                   'p_content_owner_video_metadata_a4_owner', 'p_content_owner_traffic_source_a3_owner')
+              ), d AS (
+                SELECT MIN(last_modified_time) AS derived_modified
+                FROM `youtube_channel_summary.__TABLES__`
+                WHERE table_id IN ('daily_detailed_summary', 'video_news_livestream', 'video_news_broad')
+              )
               SELECT
-                (SELECT MAX(last_modified_time) FROM `youtube_taiwanplus_owner.__TABLES__`
-                 WHERE table_id IN ('p_content_owner_basic_a4_owner', 'p_content_owner_reach_basic_a1_owner',
-                                    'p_content_owner_video_metadata_a4_owner', 'p_content_owner_traffic_source_a3_owner'))
-                >
-                (SELECT MIN(last_modified_time) FROM `youtube_channel_summary.__TABLES__`
-                 WHERE table_id IN ('daily_detailed_summary', 'video_news_livestream', 'video_news_broad'))
-                AS has_new_data
+                o.owner_modified > d.derived_modified AS has_new_data,
+                (SELECT FORMAT_DATE('%Y%m%d', MAX(_PARTITIONDATE))
+                 FROM `youtube_taiwanplus_owner.p_content_owner_traffic_source_a3_owner`)
+                  > (SELECT MAX(date) FROM `youtube_channel_summary.daily_detailed_summary`) AS new_report_date,
+                TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_MILLIS(d.derived_modified), HOUR) AS hours_since_refresh
+              FROM o CROSS JOIN d
         result: check
+    - read_check:
+        assign:
+          - has_new_data: ${check.rows[0].f[0].v == "true"}
+          - new_report_date: ${check.rows[0].f[1].v == "true"}
+          - hours_since_refresh: ${int(default(check.rows[0].f[2].v, "999"))}
+          - min_hours_between_corrections: 20
     - stop_if_no_new_data:
         switch:
-          - condition: ${not force and check.rows[0].f[0].v != "true"}
+          - condition: ${not force and not has_new_data}
             steps:
               - log_skip:
                   call: sys.log
@@ -65,6 +87,14 @@ main:
                     text: "owner 表沒有比衍生表新的資料，結束"
               - skip:
                   return: "skipped: no new owner data"
+          - condition: ${not force and not new_report_date and hours_since_refresh < min_hours_between_corrections}
+            steps:
+              - log_throttle:
+                  call: sys.log
+                  args:
+                    text: ${"只有舊日期被修正，距上次重建 " + string(hours_since_refresh) + " 小時（未滿 " + string(min_hours_between_corrections) + "），結束"}
+              - throttle:
+                  return: '${"skipped: correction only, last refresh " + string(hours_since_refresh) + "h ago"}'
 
     # 2. 先 MERGE 每日彙總，再同時重建兩張影片表
     - refresh_daily_summary:

@@ -40,11 +40,17 @@ flowchart LR
     DTS["owner transfer<br/>每次執行結束"] -->|Pub/Sub 通知| EA["Eventarc"] --> WF["Workflow<br/>youtube-owner-chain<br/>SA: yt-chain"]
     WF --> Q{"owner 表比<br/>衍生表新?"}
     Q -->|否| END["結束"]
-    Q -->|是| S1["daily_detailed_summary<br/>MERGE"] --> S2["video_news_livestream<br/>video_news_broad<br/>同時重建"] --> DBT["dbt-daily-checks"]
+    Q -->|是| T{"新報表日？或距上次<br/>重建 ≥ 20 小時?"}
+    T -->|否：只是舊日期被修正| END
+    T -->|是| S1["daily_detailed_summary<br/>MERGE"] --> S2["video_news_livestream<br/>video_news_broad<br/>同時重建"] --> DBT["dbt-daily-checks"]
     WF -->|執行失敗| MON["Cloud Monitoring 寄信"]
 ```
 
 - **判斷有沒有新資料**：比 `__TABLES__.last_modified_time`，不需要另存狀態；同一份資料重複通知也只會重建一次。
+- **限流（2026-11-26 加）**：owner transfer 除了送新報表日，每天還會重寫幾天前的舊 partition 十幾次（YouTube 修正資料）。每次重寫都會更新 `last_modified_time`，所以 2026-11 每天全量重建 4–12 次，而且每次都會再跑一次 dbt 檢查。11/1–26 這兩個 SA 共掃了 2.7 TiB，是當月 BQ 費用從 USD 1.6 漲到約 21 的主因。現在的規則：
+  - **有新報表日**（owner `traffic_source_a3` 的最新 partition 比 `daily_detailed_summary` 的 `MAX(date)` 新）→ 馬上重建，資料一樣即時。這組比較和 `assert_youtube_summary_caught_up_with_owner` 相同，所以限流不會讓那個 test 誤報。
+  - **只是舊日期被修正** → 距上次重建滿 20 小時才重建。平常隔天的新報表日重建就會順便帶進修正（video 表整張重建，daily summary MERGE 最近 14 天）。
+  - 預估每天重建 1–1.3 次。判斷用的查詢約 50 KB。想立刻帶入修正，就手動跑 `--data='{"force": true}'`。
 - **SQL** 在 [`sql/`](sql/)，部署成 `youtube_channel_summary` 裡的 stored procedure（`refresh_*`），內容與原排程查詢逐字相同（只拿掉寫死的專案 ID）。需要時可手動重跑：`CALL youtube_channel_summary.refresh_video_news_broad();`
 - **執行身分** `yt-chain`：只讀 `youtube_taiwanplus_owner`、只寫 `youtube_channel_summary`，取代原本用個人帳號執行的排程查詢。
 - 12:00 的每日檢查保留，負責 10:25 前就到齊的 IG / FB；YouTube 由這條鏈在最後觸發檢查。
