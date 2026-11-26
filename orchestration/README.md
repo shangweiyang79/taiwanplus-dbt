@@ -155,10 +155,32 @@ gcloud run jobs describe dbt-daily-checks --region=asia-east1 $P --format='value
 |---|---|---|---|
 | 只有 `youtube.daily_detailed_summary` stale | YouTube 晚送超過 7 天（不是我們壞掉） | 確認 BQ Data Transfer `youtube_taiwanplus_owner` 的執行沒有失敗即可，資料到了會自己恢復 | 可以 |
 | `assert_youtube_summary_caught_up_with_owner` 失敗 | owner 表有新資料、衍生表沒跟上：Eventarc 沒觸發或 procedure 壞了 | 看 Workflows → `youtube-owner-chain` 的執行紀錄，修好後 `gcloud workflows run youtube-owner-chain --location=asia-east1 --data='{"force": true}' $P` | 可以，procedure MERGE 最近 14 天 |
+| `assert_bq_scan_within_budget` 失敗 | 近 7 天 BigQuery 計費掃描量超過 500 GiB（照這個速度，每月查詢費超過約 USD 8）。失敗列會列出掃描量、推估月費，以及掃最多的 3 個帳號 | 如果是自己或 chatbox 開發測試 → 知道就好。如果是服務帳號 → 查它被觸發幾次（Workflow 的 executions list、Scheduler、Eventarc），見下方「成本防線」 | 可以，但一週內要處理 |
 | 其他 source freshness | 該平台的 ingestion 停了 | 查對應的 Cloud Run 服務 log、Scheduler 是否被暫停、權杖是否過期 | 看平台：快照類（IG reels 累計值）停太久會缺日資料 |
 | 其他 test 失敗 | 新資料破壞了假設 | 本機 `dbt test --target prod --select <test 名稱>` 重現，再用 `dbt show` 看是哪幾列 | 通常可以，數字錯誤會留在 view 直到修正 |
 
 `youtube-owner-chain failed` 的信只代表這條鏈自己的步驟出錯：判斷新資料、三個 procedure，或 jobs.run 呼叫本身。dbt 檢查沒過不會讓 workflow 失敗，只會寄 `dbt-daily-checks failed` 那一封。
+
+### 成本防線：`assert_bq_scan_within_budget`（2026-11-26 加）
+
+2026-11 這條 YouTube 鏈被 owner transfer 的修正寫入一天觸發 4–12 次，一個月掃了 2.7 TiB，等帳單出來才發現。為了下次幾天內就能發現，每日檢查加了這個 test：
+
+- **看什麼**：`region-asia-east1` 近 7 天（台北時間）的 `total_bytes_billed`。SCRIPT 父 job 要排除，否則會重複計算。
+- **門檻**：500 GiB/7 天 ≈ 每月 2.1 TiB，扣掉 1 TiB 免費額度後約 USD 8/月。
+  - 用 7 天而不是 1 天：開發日單日會到 100+ GiB，單日門檻會一直誤報。
+  - 歷史回放：8、9 月最高 76 GiB；10 月底最高 554 GiB（開發加上鏈剛上線）；11 月 651–1037 GiB，**11/1 就會報錯**。
+- **只在每日檢查跑**：由 `daily_checks.sh` 設 `DBT_COST_CHECK=true` 才會啟用。CI / CD 不跑，免得成本高的時候連修正都部署不上去。
+- **權限**：`dbt-runner` 多了專案層級的 `roles/bigquery.resourceViewer`（`jobs.listAll`），由 `setup_gcp.sh` 授予。
+- **調整**：門檻用 `--vars '{bq_7d_scan_limit_gib: 600}'` 調。`bq_scan_check_since` 是限流上線那天（2026-11-27），讓前 7 天不會被舊資料拖累，12/3 以後就沒有作用了。
+- **查是誰在掃**：
+  ```sql
+  SELECT DATE(creation_time,'Asia/Taipei') d, user_email, COUNT(*) jobs,
+         ROUND(SUM(total_bytes_billed)/POW(1024,3),1) gib
+  FROM `region-asia-east1`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+  WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+    AND statement_type IS DISTINCT FROM 'SCRIPT'
+  GROUP BY 1, 2 ORDER BY 1 DESC, gib DESC
+  ```
 
 ### 為什麼 YouTube freshness 門檻是 5 / 7 天
 
