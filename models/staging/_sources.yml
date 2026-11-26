@@ -76,6 +76,21 @@ sources:
             description: >
               Analytics creatorContentType 轉小寫：shorts / videoondemand / livestream / posts。
               NULL = 剛發布、Analytics 還沒有數據，下次執行會補上。
+      - name: video_retention_7d
+        description: >
+          每支影片發布後前 7 天(PT)的 Analytics 指標（averageViewPercentage 等），retention index 的原始值，一列一支影片。
+          Cloud Run Job `yt-retention`（news_youtube_scrape/cloudrun_yt_retention）每週一 11:00 回看 60 天並 MERGE；
+          窗口結束 3 天後 is_final = TRUE，之後不再更新。2026-01-01 起回補。
+          RI 本身在同一個 dataset 的 view（v_retention_index 等，不是 dbt model）計算，雙週報第 25、26 頁讀那邊。
+        config:
+          # 每次執行都會覆寫未定案的列（最近約 10 天發布的影片），所以 MAX(fetched_at) 每週都會前進
+          loaded_at_field: fetched_at
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
 
   - name: youtube_owner
     database: "{{ target.database }}"
