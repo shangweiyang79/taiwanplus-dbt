@@ -40,11 +40,12 @@ main:
           text: ${"觸發：" + trigger}
 
     # has_new_data：owner 表有比衍生表新的寫入（含舊日期被修正）
-    # new_report_date：owner 出現衍生表還沒有的報表日；和 dbt test
-    #   assert_youtube_summary_caught_up_with_owner 比的是同一組（traffic_source_a3 vs daily_detailed_summary），
-    #   新報表日一定馬上重建，所以限流不會讓那個 test 誤報
+    # new_report_date：近 14 天內（= refresh_daily_detailed_summary 的 MERGE 視窗）有任何報表日
+    #   owner traffic_source_a3 有、daily_detailed_summary 沒有。不能只比 MAX：YouTube 會亂序送
+    #   （2026-11-27 的 11/23 比 11/24 晚一天才到，只比 MAX 會被當成「修正」而延後到 20 小時後）。
+    #   dbt test assert_youtube_summary_caught_up_with_owner 用同一個規則，限流不會讓它誤報
     # hours_since_refresh：衍生表最久沒更新的那張距今幾小時
-    # 整個查詢約 50 KB（MAX(_PARTITIONDATE) 只讀 metadata）
+    # 整個查詢約 50 KB（_PARTITIONDATE 只讀 metadata）
     - check_new_data:
         call: googleapis.bigquery.v2.jobs.query
         args:
@@ -65,9 +66,14 @@ main:
               )
               SELECT
                 o.owner_modified > d.derived_modified AS has_new_data,
-                (SELECT FORMAT_DATE('%Y%m%d', MAX(_PARTITIONDATE))
-                 FROM `youtube_taiwanplus_owner.p_content_owner_traffic_source_a3_owner`)
-                  > (SELECT MAX(date) FROM `youtube_channel_summary.daily_detailed_summary`) AS new_report_date,
+                EXISTS (
+                  SELECT FORMAT_DATE('%Y%m%d', _PARTITIONDATE)
+                  FROM `youtube_taiwanplus_owner.p_content_owner_traffic_source_a3_owner`
+                  WHERE _PARTITIONDATE >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+                  EXCEPT DISTINCT
+                  SELECT date FROM `youtube_channel_summary.daily_detailed_summary`
+                  WHERE date >= FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY))
+                ) AS new_report_date,
                 TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), TIMESTAMP_MILLIS(d.derived_modified), HOUR) AS hours_since_refresh
               FROM o CROSS JOIN d
         result: check
