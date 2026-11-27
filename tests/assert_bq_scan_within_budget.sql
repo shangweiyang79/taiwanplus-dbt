@@ -17,8 +17,9 @@
 {{ config(enabled = env_var('DBT_COST_CHECK', 'false') == 'true') }}
 
 {% set limit_gib = var('bq_7d_scan_limit_gib', 500) %}
--- 限流（PR #16）11/26 上線，之前的日子不算，否則前 7 天每天都會報錯。
--- 視窗不滿 7 天時門檻按天數等比例縮小；2026-12-03 以後這個參數就沒有作用了。
+-- 限流（PR #16）11/26 上線，之前的日子不算，否則前 7 天每天都會報錯；2026-12-03 以後這個參數就沒有作用了。
+-- 視窗不滿 7 天時門檻**不**按天數縮小：第一版縮小後，第一天的門檻等於 71 GiB 的單日門檻，
+-- 11/27 開發日（3 次 PR CI、2 次 CD、強制重建，共 118 GiB）就誤報了兩次。前幾天寬鬆一點沒關係。
 {% set since = var('bq_scan_check_since', '2026-11-27') %}
 
 with bounds as (
@@ -46,7 +47,7 @@ total as (
     any_value(b.start_date) as since_date,
     any_value(date_diff(current_date('Asia/Taipei'), b.start_date, day) + 1) as days,
     round(sum(u.gib), 1) as scanned_gib,
-    round({{ limit_gib }} * any_value(date_diff(current_date('Asia/Taipei'), b.start_date, day) + 1) / 7, 1) as limit_gib,
+    {{ limit_gib }} as limit_gib,
     -- 照這段期間的速度，一個月的 BQ 查詢費（asia-east1 USD 7.1875/TiB，扣 1 TiB 免費）
     round(greatest(sum(u.gib) / any_value(date_diff(current_date('Asia/Taipei'), b.start_date, day) + 1) * 30 / 1024 - 1, 0) * 7.1875, 1)
       as est_usd_per_month,
