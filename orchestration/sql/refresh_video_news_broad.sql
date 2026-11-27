@@ -58,8 +58,9 @@ BEGIN
     SUM(stats.views) AS total_views,
     SUM(stats.engaged_views) AS total_engaged_views,
     SUM(stats.watch_time_minutes) / 60 AS total_watch_time_hours,
-    -- 加權平均觀看百分比
-    -- 公式：(總觀看分鐘數 * 100) / (總觀看次數 * 影片長度(秒) / 60)
+    -- 加權平均觀看百分比（自算，不是 API 的 averageViewPercentage）
+    -- 公式：(總觀看分鐘數 * 100) / (總 engaged views * 影片長度(秒) / 60)
+    -- ⚠️ 2026-08-27 後偏高，說明見下方 ALTER COLUMN
     SAFE_DIVIDE(
       SUM(stats.watch_time_minutes) * 100,
       SUM(stats.engaged_views) * (meta.video_length / 60))
@@ -95,4 +96,14 @@ BEGIN
         `youtube_taiwanplus_owner.p_content_owner_video_metadata_a4_owner`
     )
   GROUP BY 1, 2, 3, 4, 5, 6, 7, 8;
+
+  -- CREATE OR REPLACE 每次都會洗掉欄位說明，所以建表後再設一次
+  ALTER TABLE `youtube_channel_summary.video_news_broad`
+    ALTER COLUMN avg_view_duration_percentage SET OPTIONS (description =
+      '自算的加權平均觀看百分比 = 累計觀看分鐘數 × 100 ÷ (累計 engaged views × 片長分鐘)，不是 YouTube API 的 averageViewPercentage。'
+      || '⚠️ 2026-08-27 YouTube 放寬 views 定義後此值偏高：watch time 含 1 秒級短觀看的時數，但 engaged views 不含這些觀看'
+      || '（以發布後 7 天資料實測，SOT 9–10 月中位數自算約 60，API／Studio 約 55）。'
+      || '不適合拿來看 retention 或跨 2026-08-27 比較。要和 Studio 一致的值請用 API 原值：'
+      || '累計請用 YouTube_data.video_stats_latest.average_view_percentage（每週一更新，同一批影片；2026-08-27 後發布的影片，此欄中位數比它高 2.4 點），'
+      || '發布後 7 天請用 YouTube_data.video_retention_7d.average_view_percentage。');
 END;
