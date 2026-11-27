@@ -156,7 +156,7 @@ gcloud run jobs describe dbt-daily-checks --region=asia-east1 $P --format='value
 |---|---|---|---|
 | 只有 `youtube.daily_detailed_summary` stale | YouTube 晚送超過 7 天（不是我們壞掉） | 確認 BQ Data Transfer `youtube_taiwanplus_owner` 的執行沒有失敗即可，資料到了會自己恢復 | 可以 |
 | `assert_youtube_summary_caught_up_with_owner` 失敗 | owner 表有新資料、衍生表沒跟上：Eventarc 沒觸發或 procedure 壞了 | 看 Workflows → `youtube-owner-chain` 的執行紀錄，修好後 `gcloud workflows run youtube-owner-chain --location=asia-east1 --data='{"force": true}' $P` | 可以，procedure MERGE 最近 14 天 |
-| `assert_bq_scan_within_budget` 失敗 | 近 7 天 BigQuery 計費掃描量超過 500 GiB（照這個速度，每月查詢費超過約 USD 8）。失敗列會列出掃描量、推估月費，以及掃最多的 3 個帳號 | 如果是自己或 chatbox 開發測試 → 知道就好。如果是服務帳號 → 查它被觸發幾次（Workflow 的 executions list、Scheduler、Eventarc），見下方「成本防線」 | 可以，但一週內要處理 |
+| `assert_bq_scan_within_budget` 失敗 | 近 7 天**自動化**（服務帳號 + BQ 排程查詢）的計費掃描量超過 450 GiB。人手動的查詢和 CI / CD 不算。失敗列會列出掃描量、推估月費，以及掃最多的 3 個帳號 | 查掃最多的那個帳號被觸發了幾次（Workflow 的 executions list、Scheduler、Eventarc、排程查詢），見下方「成本防線」 | 可以，但一週內要處理 |
 | 其他 source freshness | 該平台的 ingestion 停了 | 查對應的 Cloud Run 服務 log、Scheduler 是否被暫停、權杖是否過期 | 看平台：快照類（IG reels 累計值）停太久會缺日資料 |
 | 其他 test 失敗 | 新資料破壞了假設 | 本機 `dbt test --target prod --select <test 名稱>` 重現，再用 `dbt show` 看是哪幾列 | 通常可以，數字錯誤會留在 view 直到修正 |
 
@@ -166,13 +166,26 @@ gcloud run jobs describe dbt-daily-checks --region=asia-east1 $P --format='value
 
 2026-11 這條 YouTube 鏈被 owner transfer 的修正寫入一天觸發 4–12 次，一個月掃了 2.7 TiB，等帳單出來才發現。為了下次幾天內就能發現，每日檢查加了這個 test：
 
-- **看什麼**：`region-asia-east1` 近 7 天（台北時間）的 `total_bytes_billed`。SCRIPT 父 job 要排除，否則會重複計算。
-- **門檻**：500 GiB/7 天 ≈ 每月 2.1 TiB，扣掉 1 TiB 免費額度後約 USD 8/月。
-  - 用 7 天而不是 1 天：開發日單日會到 100+ GiB，單日門檻會一直誤報。
-  - 歷史回放：8、9 月最高 76 GiB；10 月底最高 554 GiB（開發加上鏈剛上線）；11 月 651–1037 GiB，**11/1 就會報錯**。
+- **看什麼**：`region-asia-east1` 近 7 天（台北時間）**自動化**的 `total_bytes_billed`。SCRIPT 父 job 要排除，否則會重複計算。
+  - **算進來**：服務帳號，以及所有 BQ 排程查詢。有些排程查詢掛在個人帳號下（joy.yang、cynthia.liu），所以用 `job_id` 的 `scheduled_query` 前綴來判斷。
+  - **不算**：人手動的查詢、CI（`dbt-ci`）、CD（`dbt-prod`、`dbt-deployer`）。開發日一天就 100+ GiB（一次 PR 的 CI 約 15–25 GiB，一次 CD 約 10–20 GiB），連續幾天開發就會誤報，而且那是自己知道的花費。第一版把這些都算進去，11/27 開發日就誤報了兩次。
+- **門檻**：450 GiB/7 天。依據是 2026-11-27 實測近 90 天各類別的 7 天用量：
+
+  | 類別 | 平常一週 | 偏多的一週 |
+  |---|---:|---:|
+  | yt-chain（限流後預估，每次重建約 7.4 GiB） | ~60 | ~105 |
+  | dbt-runner（每次檢查約 10 GiB；12:00 一次 + 每次重建後一次） | ~150 | ~210 |
+  | BQ 排程查詢 | 26 | 51 |
+  | ingestion（預設 compute SA，含 FB 月回刷） | 12 | 46 |
+  | youtube-shorts-fetcher | ~5 | 29 |
+  | chatbox | ~0 | 69 |
+  | 每週 / 每月的 Cloud Run job（yt-weekly、yt-retention、news-classify） | ~0 | 0.5 |
+  | **合計** | **~260** | **~510**（所有最大值同一週疊在一起，極少發生） |
+
+  11 月失控時，自動化每週 600–890 GiB，失控開始後約 2–3 天累積到門檻就會寄信。**2026-12-03 滿一週後要用實測值重新校準**，門檻改成實際平常週的約 1.7 倍。
 - **只在每日檢查跑**：由 `daily_checks.sh` 設 `DBT_COST_CHECK=true` 才會啟用。CI / CD 不跑，免得成本高的時候連修正都部署不上去。
 - **權限**：`dbt-runner` 多了專案層級的 `roles/bigquery.resourceViewer`（`jobs.listAll`），由 `setup_gcp.sh` 授予。
-- **調整**：門檻用 `--vars '{bq_7d_scan_limit_gib: 600}'` 調。`bq_scan_check_since` 是限流上線那天（2026-11-27），讓前 7 天不會被舊資料拖累，12/3 以後就沒有作用了。
+- **調整**：門檻用 `--vars '{bq_7d_scan_limit_gib: 500}'` 調。`bq_scan_check_since` 是限流上線那天（2026-11-27），讓前 7 天不會被舊資料拖累，12/3 以後就沒有作用了。視窗不滿 7 天時門檻**不**縮小，第一版有縮小，第一天門檻只剩 71 GiB，所以誤報。
 - **查是誰在掃**：
   ```sql
   SELECT DATE(creation_time,'Asia/Taipei') d, user_email, COUNT(*) jobs,
