@@ -39,8 +39,9 @@ sources:
               自算的加權平均觀看百分比 = 累計觀看分鐘數 × 100 ÷（累計 engaged views × 片長分鐘），不是 YouTube API 的 averageViewPercentage。
               ⚠️ 2026-08-27 YouTube 放寬 views 定義後此值偏高：watch time 含 1 秒級短觀看的時數，但 engaged views 不含這些觀看
               （以發布後 7 天資料實測，SOT 9–10 月中位數自算約 60，API／Studio 約 55）。
-              不適合拿來看 retention 或跨 2026-08-27 比較；要和 Studio 一致的值請用
-              YouTube_data.video_retention_7d.average_view_percentage（發布後 7 天，API 原值）。
+              不適合拿來看 retention 或跨 2026-08-27 比較。要和 Studio 一致的值請用 API 原值：
+              累計請用 YouTube_data.video_stats_latest.average_view_percentage（每週一更新，同一批影片；
+              2026-08-27 後發布的影片，此欄中位數比它高 2.4 點），發布後 7 天請用 YouTube_data.video_retention_7d.average_view_percentage。
               目前沒有 dbt model 讀這一欄。BQ 上的欄位說明由 refresh_video_news_broad 每次重建後設定。
       - name: daily_detailed_summary
         description: >
@@ -84,6 +85,22 @@ sources:
             description: >
               Analytics creatorContentType 轉小寫：shorts / videoondemand / livestream / posts。
               NULL = 剛發布、Analytics 還沒有數據，下次執行會補上。
+      - name: video_stats_latest
+        description: >
+          每支影片到 as_of_date（US/Pacific）為止的累計 Analytics 指標，一列一支影片，每次執行整列覆寫。
+          average_view_percentage 是 API 的 averageViewPercentage 原值，與 Studio 一致；取代
+          video_news_broad.avg_view_duration_percentage 的自算值（2026-08-27 後偏高）。
+          Cloud Run Job `yt-retention` 步驟 2（news_youtube_scrape/cloudrun_yt_retention）每週一 11:00 更新；
+          影片清單 = video_metadata ∪ video_news_broad（含 Livestream 頻道），2026 起發布。
+          views 在 2026-08-27 後因 YouTube 放寬定義約變 2 倍，跨這天比較請用 engaged_views。
+        config:
+          loaded_at_field: fetched_at
+          freshness:
+            warn_after: {count: 8, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: video_id
+            data_tests: [unique, not_null]
       - name: video_retention_7d
         description: >
           每支影片發布後前 7 天(PT)的 Analytics 指標（averageViewPercentage 等），retention index 的原始值，一列一支影片。
